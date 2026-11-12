@@ -24,8 +24,9 @@ import (
 
 type Vuln struct {
 	CVE  string  `json:"cve"`
-	KEV  bool    `json:"kev"`  // in the CISA Known Exploited Vulnerabilities catalog
-	EPSS float64 `json:"epss"` // probability of exploitation in the next 30 days
+	KEV  bool    `json:"kev"`            // in the CISA Known Exploited Vulnerabilities catalog
+	EPSS float64 `json:"epss"`           // probability of exploitation in the next 30 days
+	CVSS float64 `json:"cvss,omitempty"` // NVD base score (CVEs of the versions found)
 }
 
 type Exposure struct {

@@ -143,6 +143,18 @@ func parsePorts(text string) ([]int, error) {
 		if part == "" {
 			continue
 		}
+		if preset, ok := portPresets[strings.ToLower(part)]; ok {
+			for _, p := range preset {
+				set[p] = true
+			}
+			continue
+		}
+		if strings.EqualFold(part, "default") {
+			for _, p := range defaultPorts {
+				set[p] = true
+			}
+			continue
+		}
 		if lo, hi, ok := strings.Cut(part, "-"); ok {
 			a, err1 := strconv.Atoi(strings.TrimSpace(lo))
 			b, err2 := strconv.Atoi(strings.TrimSpace(hi))

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/fetch"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/chromedp"
 )
@@ -36,6 +37,11 @@ type Options struct {
 	TLS            bool   // analyze the certificates and TLS setup of the https services found
 	Label          bool   // write host:port, URL, status and date at the bottom of each capture
 	Keys           Keys
+	Analyze        bool        // technologies, sensitive pages, headers, favicon, JS, robots, banners, takeover
+	Dirs           []string    // -dirs: folders to test for directory listings (nil = off)
+	Files          []FileRule  // -files: sensitive files to test (nil = off)
+	Proxy          *Proxy      // pages, favicons, folders and files go through it
+	Exclusions     *Exclusions // out-of-scope targets, never scanned
 }
 
 type Result struct {
@@ -49,6 +55,25 @@ type Result struct {
 	Size     int    `json:"size"`
 	File     string `json:"file"`
 	Error    string `json:"error"`
+
+	// Page analysis (webinfo.go, recon.go)
+	Tech           []Tech      `json:"tech,omitempty"`
+	Tags           []string    `json:"tags,omitempty"`
+	HeaderIssues   []string    `json:"header_issues,omitempty"`
+	FaviconURL     string      `json:"favicon_url,omitempty"`
+	FaviconHash    string      `json:"favicon_hash,omitempty"`
+	PHash          string      `json:"phash,omitempty"`
+	Group          int         `json:"visual_group,omitempty"`
+	GroupSize      int         `json:"group_size,omitempty"`
+	JS             *JSInfo     `json:"js,omitempty"`
+	WellKnown      *WellKnown  `json:"well_known,omitempty"`
+	FilesFound     []FileFound `json:"files_found,omitempty"`
+	Banner         string      `json:"banner,omitempty"`
+	Service        string      `json:"service,omitempty"`
+	ServiceVersion string      `json:"service_version,omitempty"`
+	Dir            bool        `json:"dir,omitempty"` // capture of a folder found by -dirs
+	PageText       string      `json:"-"`             // for the takeover fingerprints
+	Dup            bool        `json:"-"`             // visual duplicate (report only)
 }
 
 // Callbacks are optional hooks used by the GUI and the CLI.
@@ -193,7 +218,7 @@ func shotLabel(host string, port int, url, finalURL string, status int, ua strin
 
 // capture opens url in a new tab with the given UA and saves a PNG.
 // stopCtx aborts the capture when the user stops the scan.
-func capture(stopCtx, browserCtx context.Context, opt Options, ua UA, host string, port int, url, outFile string) (Result, error) {
+func capture(stopCtx, browserCtx context.Context, opt Options, ws *webState, ua UA, host string, port int, url, outFile string) (Result, error) {
 	tabCtx, cancelTab := chromedp.NewContext(browserCtx)
 	defer cancelTab()
 	ctx, cancel := context.WithTimeout(tabCtx, opt.PageTimeout)
@@ -209,6 +234,37 @@ func capture(stopCtx, browserCtx context.Context, opt Options, ua UA, host strin
 	if ua.Value != "" {
 		setup = append(setup, emulation.SetUserAgentOverride(ua.Value))
 	}
+	if p := opt.Proxy; p != nil && p.User != "" {
+		// Chromium takes no credentials in --proxy-server: answer the proxy's challenge here
+		setup = append(setup, fetch.Enable().WithHandleAuthRequests(true))
+		chromedp.ListenTarget(ctx, func(ev any) {
+			switch e := ev.(type) {
+			case *fetch.EventRequestPaused:
+				go chromedp.Run(ctx, fetch.ContinueRequest(e.RequestID))
+			case *fetch.EventAuthRequired:
+				go chromedp.Run(ctx, fetch.ContinueWithAuth(e.RequestID, &fetch.AuthChallengeResponse{
+					Response: fetch.AuthChallengeResponseResponseProvideCredentials, Username: p.User, Password: p.Password}))
+			}
+		})
+	}
+	// Scripts loaded by the page, analysed afterwards without downloading them again
+	type script struct {
+		id  network.RequestID
+		url string
+	}
+	var scriptsMu sync.Mutex
+	var scripts []script
+	if ws != nil {
+		chromedp.ListenTarget(ctx, func(ev any) {
+			if e, ok := ev.(*network.EventResponseReceived); ok && e.Type == network.ResourceTypeScript {
+				scriptsMu.Lock()
+				if len(scripts) < 40 {
+					scripts = append(scripts, script{e.RequestID, e.Response.URL})
+				}
+				scriptsMu.Unlock()
+			}
+		})
+	}
 	if err := chromedp.Run(ctx, setup...); err != nil {
 		return Result{}, err
 	}
@@ -216,21 +272,61 @@ func capture(stopCtx, browserCtx context.Context, opt Options, ua UA, host strin
 	if err != nil {
 		return Result{}, err
 	}
-	var title, final string
-	var size int
+	var title, final, content string
 	var png []byte
 	err = chromedp.Run(ctx,
 		chromedp.Sleep(800*time.Millisecond), // let JS render a bit
 		chromedp.Title(&title),
 		chromedp.Location(&final),
-		chromedp.Evaluate(`document.documentElement ? document.documentElement.outerHTML.length : 0`, &size),
+		chromedp.Evaluate(`document.documentElement ? document.documentElement.outerHTML : ''`, &content),
 	)
 	if err != nil {
 		return Result{}, err
 	}
+	size := len(content)
 	status := 0
 	if resp != nil {
 		status = int(resp.Status)
+	}
+	var info Result
+	if ws != nil {
+		var hs []Header
+		if resp != nil {
+			for k, v := range resp.Headers {
+				for _, line := range strings.Split(fmt.Sprint(v), "\n") {
+					hs = append(hs, Header{k, line})
+				}
+			}
+		}
+		info.Tech = detectTech(hs, content, title)
+		info.Tags = pageTags(title, content, final, status, hs, info.Tech)
+		info.HeaderIssues = headerIssues(final, hs, content)
+		var iconURL string
+		if chromedp.Run(ctx, chromedp.Evaluate(faviconJS, &iconURL)) == nil {
+			info.FaviconURL = iconURL
+			info.FaviconHash = ws.fetchFavicon(ctx, iconURL, ua.Value)
+		}
+		scriptsMu.Lock()
+		list := append([]script{}, scripts...)
+		scriptsMu.Unlock()
+		var sources []jsSource
+		for _, sc := range list {
+			if !sameSite(sc.url, final) {
+				continue
+			}
+			var body []byte
+			_ = chromedp.Run(ctx, chromedp.ActionFunc(func(c context.Context) error {
+				b, err := network.GetResponseBody(sc.id).Do(c)
+				body = b
+				return err
+			}))
+			if len(body) > 0 {
+				sources = append(sources, jsSource{sc.url, string(body[:min(len(body), 3_000_000)])})
+			}
+		}
+		sources = append(sources, inlineScripts(final, content)...)
+		info.JS = analyzeJS(sources)
+		info.PageText = content[:min(len(content), 20000)]
 	}
 	if opt.Label {
 		text, _ := json.Marshal(shotLabel(host, port, url, final, status, ua.Name))
@@ -243,7 +339,11 @@ func capture(stopCtx, browserCtx context.Context, opt Options, ua UA, host strin
 	if err := os.WriteFile(outFile, png, 0o644); err != nil {
 		return Result{}, err
 	}
-	return Result{URL: url, Title: title, FinalURL: final, Size: size, File: filepath.Base(outFile), Status: status}, nil
+	if ws != nil {
+		info.PHash = screenshotHash(png)
+	}
+	info.URL, info.Title, info.FinalURL, info.Size, info.File, info.Status = url, title, final, size, filepath.Base(outFile), status
+	return info, nil
 }
 
 // Run scans every host:port, captures web pages, writes report.html and results.csv.
@@ -261,13 +361,34 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 	if err != nil {
 		return nil, err
 	}
+	if !opt.Exclusions.empty() {
+		hosts = opt.Exclusions.filter(hosts, logf)
+		if len(hosts) == 0 {
+			logf("[exclusion] plus aucune cible dans le périmètre")
+			return nil, nil
+		}
+	}
+	var extra []string
+	if opt.Proxy != nil {
+		// Chromium never sends localhost through a proxy unless told so
+		extra = append(extra, "--proxy-server="+opt.Proxy.Server(), "--proxy-bypass-list=<-loopback>")
+		how := "test des ports en direct"
+		if opt.Proxy.Scheme == "socks5" {
+			how = "test des ports via SOCKS5"
+		}
+		logf("[proxy] pages, favicons et dossiers via %s ; %s. Analyse TLS, enrichissement et NVD restent en direct.", opt.Proxy.Server(), how)
+	}
+	var ws *webState
+	if opt.Analyze || opt.Dirs != nil || opt.Files != nil {
+		ws = newWebState(opt.Proxy, opt.PageTimeout)
+	}
 	if err := os.MkdirAll(opt.Output, 0o755); err != nil {
 		return nil, err
 	}
 	logf("Browser: %s", browser)
 
 	// The browser lives outside ctx: stopping the scan must still let us close it cleanly
-	browserCtx, closeBrowser, err := startBrowser(browser, opt.Width, opt.Height)
+	browserCtx, closeBrowser, err := startBrowser(browser, opt.Width, opt.Height, extra...)
 	if err != nil {
 		return nil, fmt.Errorf("cannot start browser: %w", err)
 	}
@@ -293,8 +414,8 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 
 	worker := func() {
 		for j := range jobs {
-			if ctx.Err() == nil && portOpen(j.host, j.port, opt.ConnectTimeout) {
-				scanService(ctx, browserCtx, opt, limiter, j.host, j.port, add, cb, logf)
+			if ctx.Err() == nil && isOpen(ctx, opt, j.host, j.port) {
+				scanService(ctx, browserCtx, opt, ws, limiter, j.host, j.port, add, cb, logf)
 			}
 			atomic.AddInt64(&done, 1)
 		}
@@ -356,8 +477,61 @@ feed:
 			}
 		}
 	}
-	if err := writeReports(results, exposures, tlsResults, opt.Output); err != nil {
+	var inv []*TechEntry
+	var groups [][]int
+	var takeovers []Takeover
+	if opt.Analyze && len(results) > 0 {
+		sortResults(results) // groups hold indexes: sort once, before grouping
+		groups = groupSimilar(results)
+		if len(groups) > 0 {
+			nDup := 0
+			for _, g := range groups {
+				nDup += len(g) - 1
+			}
+			logf("[web] %d groupe(s) de pages similaires, %d doublon(s) visuel(s)", len(groups), nDup)
+		}
+		nTags := 0
+		for _, r := range results {
+			if len(r.Tags) > 0 {
+				nTags++
+			}
+		}
+		if nTags > 0 {
+			logf("[web] %d page(s) sensible(s) : voir « Pages sensibles » dans le rapport", nTags)
+		}
+		if ctx.Err() == nil {
+			var names []string
+			pages := map[string]string{}
+			for _, h := range hosts {
+				if net.ParseIP(strings.Trim(h, "[]")) == nil {
+					names = append(names, strings.ToLower(h))
+				}
+			}
+			for _, r := range results {
+				if k := strings.ToLower(r.Host); r.PageText != "" && pages[k] == "" {
+					pages[k] = r.PageText
+				}
+			}
+			if len(names) > 0 {
+				takeovers = checkTakeover(ctx, names, pages, logf)
+			}
+		}
+		inv = techInventory(results)
+		if opt.Enrich && ctx.Err() == nil {
+			lookupTechCVEs(ctx, inv, opt.Keys, logf)
+		}
+		if err := writeTechCSV(inv, opt.Output); err != nil {
+			logf("[web] %v", err)
+		}
+	}
+	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers); err != nil {
 		return results, err
+	}
+	if err := writeResultsJSON(opt.Output, results, exposures, tlsResults, inv, groups, takeovers); err != nil {
+		logf("[export] results.json : %v", err)
+	}
+	if err := writeXLSX(filepath.Join(opt.Output, "results.xlsx"), buildSheets(results, exposures, inv, takeovers)); err != nil {
+		logf("[export] results.xlsx : %v", err)
 	}
 	ok := 0
 	for _, r := range results {
@@ -373,12 +547,37 @@ feed:
 	return results, nil
 }
 
-// scanService captures one open host:port with every UA, trying the likely scheme first.
-func scanService(ctx, browserCtx context.Context, opt Options, limiter *rateLimiter, host string, port int,
+// isOpen tests the TCP port: through the SOCKS5 proxy when there is one, else directly.
+func isOpen(ctx context.Context, opt Options, host string, port int) bool {
+	if opt.Proxy != nil && opt.Proxy.Scheme == "socks5" {
+		conn, err := dialTCP(ctx, opt.Proxy, host, port, opt.ConnectTimeout+2*time.Second)
+		if err != nil {
+			return false
+		}
+		conn.Close()
+		return true
+	}
+	return portOpen(host, port, opt.ConnectTimeout)
+}
+
+// scanService captures one open host:port with every UA, trying the likely scheme first, then runs
+// the per-service checks (robots, files, folders, banner of a non-web service).
+func scanService(ctx, browserCtx context.Context, opt Options, ws *webState, limiter *rateLimiter, host string, port int,
 	add func(Result), cb Callbacks, logf func(string, ...any)) {
 	schemes := []string{"http", "https"}
 	if httpsPorts[port] {
 		schemes = []string{"https", "http"}
+	}
+	var rows []Result
+	baseURL, baseUA := "", ""
+	defer func() {
+		for _, r := range rows {
+			add(r)
+		}
+	}()
+	var analysis *webState
+	if opt.Analyze {
+		analysis = ws
 	}
 	for _, ua := range opt.UAs {
 		suffix, tag := "", ""
@@ -393,7 +592,7 @@ func scanService(ctx, browserCtx context.Context, opt Options, limiter *rateLimi
 			}
 			url := buildURL(host, port, scheme)
 			out := filepath.Join(opt.Output, fmt.Sprintf("%s_%d_%s%s.png", safeName(host), port, scheme, suffix))
-			r, err := capture(ctx, browserCtx, opt, ua, host, port, url, out)
+			r, err := capture(ctx, browserCtx, opt, analysis, ua, host, port, url, out)
 			if err != nil {
 				if ctx.Err() != nil {
 					return
@@ -405,17 +604,90 @@ func scanService(ctx, browserCtx context.Context, opt Options, limiter *rateLimi
 				continue
 			}
 			r.Host, r.Port, r.UA = host, port, ua.Name
-			add(r)
-			logf("[+] %s  %d  %s%s", url, r.Status, truncate(r.Title, 60), tag)
+			rows = append(rows, r)
+			extra := ""
+			if len(r.Tags) > 0 {
+				extra += "  [" + strings.Join(r.Tags, ", ") + "]"
+			}
+			if len(r.Tech) > 0 {
+				extra += "  " + strings.Join(techLabels(r.Tech[:min(4, len(r.Tech))]), ", ")
+			}
+			logf("[+] %s  %d  %s%s%s", url, r.Status, truncate(r.Title, 60), tag, extra)
 			if cb.Shot != nil {
 				cb.Shot(r)
+			}
+			if baseURL == "" {
+				baseURL, baseUA = url, ua.Value
 			}
 			captured = true
 			break
 		}
 		if !captured {
-			add(Result{Host: host, Port: port, UA: ua.Name, URL: buildURL(host, port, schemes[0]), Error: lastErr})
+			rows = append(rows, Result{Host: host, Port: port, UA: ua.Name, URL: buildURL(host, port, schemes[0]), Error: lastErr})
 			logf("[-] %s:%d open but no web page (%s)%s", host, port, truncate(lastErr, 80), tag)
+		}
+	}
+	if ctx.Err() != nil {
+		return
+	}
+	first := -1
+	for i, r := range rows {
+		if r.File != "" {
+			first = i
+			break
+		}
+	}
+	if first >= 0 && opt.Analyze {
+		rows[first].WellKnown = ws.wellKnown(ctx, baseURL, baseUA)
+		if w := rows[first].WellKnown; w != nil && len(w.Robots) > 0 {
+			logf("[robots] %srobots.txt : %d chemin(s)", baseURL, len(w.Robots))
+		}
+	}
+	if first >= 0 && opt.Files != nil && ctx.Err() == nil {
+		rows[first].FilesFound = ws.probeFiles(ctx, baseURL, baseUA, opt.Files, limiter)
+		for _, f := range rows[first].FilesFound {
+			logf("[fichier] %s  %s", f.URL, f.Severity)
+		}
+	}
+	if first < 0 && opt.Analyze {
+		text := grabBanner(ctx, host, port, opt.Proxy)
+		name, version, cpes := parseBanner(text)
+		if text != "" || name != "" {
+			for i := range rows {
+				rows[i].Banner, rows[i].Service, rows[i].ServiceVersion = bannerDisplay(text), name, version
+				if name != "" {
+					rows[i].Tech = []Tech{{Name: name, Version: version, CPEs: cpes}}
+				}
+			}
+			svc := name
+			if svc == "" {
+				svc = "?"
+			}
+			logf("[service] %s:%d  %s %s  %s", host, port, svc, version, truncate(bannerDisplay(text), 80))
+		}
+	}
+	if first >= 0 && opt.Dirs != nil && ctx.Err() == nil {
+		for _, u := range ws.probeDirs(ctx, baseURL, baseUA, opt.Dirs, limiter) {
+			if ctx.Err() != nil {
+				return
+			}
+			p := strings.Trim(strings.TrimPrefix(u, serviceRoot(u)), "/")
+			scheme := strings.SplitN(u, ":", 2)[0]
+			out := filepath.Join(opt.Output, fmt.Sprintf("%s_%d_%s_dir_%s.png", safeName(host), port, scheme, safeName(p)))
+			r, err := capture(ctx, browserCtx, opt, analysis, UA{Name: "default", Value: baseUA}, host, port, u, out)
+			if err != nil {
+				logf("[dir] %s  liste de fichiers, capture impossible (%s)", u, truncate(firstLine(err), 120))
+				continue
+			}
+			r.Host, r.Port, r.UA, r.Dir = host, port, "dossier", true
+			if !containsStr(r.Tags, "index-of") {
+				r.Tags = append([]string{"index-of"}, r.Tags...)
+			}
+			rows = append(rows, r)
+			logf("[dir] %s  %d  Index of : liste de fichiers", u, r.Status)
+			if cb.Shot != nil {
+				cb.Shot(r)
+			}
 		}
 	}
 }

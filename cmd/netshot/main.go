@@ -46,7 +46,7 @@ func main() {
 	fs := flag.NewFlagSet("netshot", flag.ExitOnError)
 	var files, uas multiFlag
 	fs.Var(&files, "f", "file with one target per line, or a CSV export (AD, ADCS, CMDB) (repeatable)")
-	ports := fs.String("p", portsString(defaultPorts), "ports, e.g. 80,443,8000-8010")
+	ports := fs.String("p", portsString(defaultPorts), "ports, e.g. 80,443,8000-8010, or presets: web (~100 web ports), services (SSH, FTP, SMTP, RDP, databases...), default; mixable: web,services,8443")
 	output := fs.String("o", "screenshots_"+time.Now().Format("20060102_150405"), "output folder")
 	concurrency := fs.Int("c", 10, "parallel checks")
 	connectTimeout := fs.Float64("connect-timeout", 1.5, "TCP timeout in seconds")
@@ -69,7 +69,16 @@ func main() {
 	fs.Var(&keyFlags, "key", "API key as source=KEY, e.g. domscan=abc (repeatable)")
 	saveKeysFlag := fs.Bool("save-keys", false, "store the -key values in "+keysPath())
 	noLabel := fs.Bool("no-label", false, "do not write host:port, URL, status and date at the bottom of the screenshots")
-	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS)")
+	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS) nor look up the CVEs of the versions found (NVD)")
+	noAnalyze := fs.Bool("no-analyze", false, "do not analyse the pages (technologies, sensitive pages, headers, favicon, similar pages, JS, robots, banners, takeover)")
+	dirsFlag := fs.Bool("dirs", false, "test the common folders of dirs.txt on every web service and capture the directory listings found ('Index of'); extra requests")
+	dirsWordlist := fs.String("dirs-wordlist", "", "folder list for -dirs, one path per line (implies -dirs)")
+	filesFlag := fs.Bool("files", false, "test the sensitive files of files.txt (.env, .git/HEAD, backups, phpinfo, actuator...) on every web service; each answer is checked against a signature")
+	filesWordlist := fs.String("files-wordlist", "", "file list for -files: path<TAB>severity<TAB>regex per line (implies -files)")
+	var excludeFlags, excludeFiles multiFlag
+	fs.Var(&excludeFlags, "exclude", "out-of-scope targets never scanned: IP, CIDR, host name or *.domain, comma separated (repeatable)")
+	fs.Var(&excludeFiles, "exclude-file", "file of out-of-scope targets, one per line (repeatable)")
+	proxyFlag := fs.String("proxy", "", "proxy for the pages: http://127.0.0.1:8080 (Burp) or socks5://host:1080, optional user:password@ (http only)")
 	dnsDomain := fs.String("dns", "", "show the DNS records of a domain (like dig: ANY, then type by type) and exit")
 	dnsServer := fs.String("dns-server", "", "DNS server for -dns, e.g. 1.1.1.1 or 10.0.0.1:53 (default: system resolvers)")
 	wordlistFile := fs.String("wordlist", "", "word list for the 'wordlist' source (DNS brute force), one label per line (default: built-in 1,000 words)")
@@ -236,7 +245,32 @@ func main() {
 		Label:          !*noLabel,
 		TLS:            *tlsScan,
 		Keys:           keys,
+		Analyze:        !*noAnalyze,
 	}
+	if *dirsFlag || *dirsWordlist != "" {
+		var custom []string
+		if *dirsWordlist != "" {
+			lines, err := readLines(*dirsWordlist)
+			exitOnErr(err)
+			custom = lines
+		}
+		opt.Dirs = dirWords(custom)
+		fmt.Fprintf(os.Stderr, "-dirs: %d folders per web service\n", len(opt.Dirs))
+	}
+	if *filesFlag || *filesWordlist != "" {
+		var custom []string
+		if *filesWordlist != "" {
+			lines, err := readLines(*filesWordlist)
+			exitOnErr(err)
+			custom = lines
+		}
+		opt.Files = fileRules(custom)
+		fmt.Fprintf(os.Stderr, "-files: %d files per web service\n", len(opt.Files))
+	}
+	opt.Proxy, err = parseProxy(*proxyFlag)
+	exitOnErr(err)
+	opt.Exclusions, err = readExclusions(excludeFlags, excludeFiles)
+	exitOnErr(err)
 	lastPrint := time.Now()
 	_, err = Run(ctx, hosts, opt, Callbacks{
 		Log: func(s string) { fmt.Println(s) },
@@ -248,6 +282,15 @@ func main() {
 		},
 	})
 	exitOnErr(err)
+}
+
+// readLines reads a word list as is (no CSV detection, unlike the target files).
+func readLines(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(strings.ReplaceAll(strings.TrimPrefix(string(data), "\ufeff"), "\r", ""), "\n"), nil
 }
 
 func seconds(f float64) time.Duration { return time.Duration(f * float64(time.Second)) }

@@ -33,6 +33,11 @@ netshot-go/
 │   ├── window_*.go           ouverture maximisée de la fenêtre (Windows)
 │   ├── wordlist.go, subdomains.txt   dictionnaire de la force brute DNS
 │   ├── report.go             report.html et results.csv
+│   ├── webinfo.go            technologies, CVE (NVD), favicon, pages sensibles, pages similaires, en-têtes
+│   ├── recon.go              fichiers sensibles, dossiers, JavaScript, robots, takeover, bannières, préréglages de ports
+│   ├── dirs.txt, files.txt   dossiers courants (-dirs) et fichiers sensibles (-files), intégrés à l'exe
+│   ├── scope.go              hors périmètre (-exclude) et proxy (-proxy)
+│   ├── export.go             results.json et results.xlsx
 │   ├── targets.go, ua.go     analyse des cibles et des ports, liste des user agents
 │   ├── icon.png              favicon de l'interface (généré)
 │   └── rsrc_windows_amd64.syso   icône de l'exe (généré)
@@ -75,8 +80,12 @@ Dans l'ordre du déroulé d'une reconnaissance :
 - **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier `.txt` ou d'un export `.csv`.
 - **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
   résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
-- **Cases** : « Enrichir les IP » (Shodan, LeakIX, KEV, EPSS), « Analyser les certificats TLS »,
-  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image).
+- **Ports** : liste libre ou menu **Préréglages…** (par défaut, web étendu, services non web, les deux).
+- **Cases** : « Enrichir les IP et les versions » (Shodan, LeakIX, NVD, KEV, EPSS), « Analyser les certificats TLS »,
+  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image),
+  « Tester les dossiers courants (Index of) » et « Tester les fichiers sensibles (.env, .git…) »
+  (désactivées par défaut).
+- **Proxy** et **Hors périmètre** : voir « Périmètre et proxy ».
 - **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
 - **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
 - **Dernière capture** : aperçu affiché à côté du journal ; clic pour ouvrir l'image.
@@ -122,7 +131,7 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 | Option | Rôle | Défaut |
 |---|---|---|
 | `-f FILE` | fichier de cibles : une par ligne (`#` = commentaire) ou export CSV (répétable) | - |
-| `-p PORTS` | ports, ex. `80,443,8000-8010` | `80,443,8000,8080,8443` |
+| `-p PORTS` | ports, ex. `80,443,8000-8010`, ou préréglages `web`, `services`, `default` (mélangeables) | `80,443,8000,8080,8443` |
 | `-o DIR` | dossier de sortie | `screenshots_<date>` dans le dossier courant |
 | `-c N` | tests en parallèle | `10` |
 | `-connect-timeout` | délai TCP (s) | `1.5` |
@@ -135,7 +144,15 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 | `-key SOURCE=CLÉ` | clé API d'un service (répétable) | fichier de clés |
 | `-save-keys` | enregistre les `-key` dans le fichier de clés | - |
 | `-list-sources` | liste les sources et les clés configurées | - |
-| `-no-enrich` | désactive l'enrichissement des IP | enrichissement actif |
+| `-no-enrich` | désactive l'enrichissement des IP et la recherche des CVE dans NVD | enrichissement actif |
+| `-no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires, JS, robots, bannières, takeover) | analyse active |
+| `-files` | teste les fichiers sensibles de `files.txt` (signature vérifiée) | non |
+| `-files-wordlist FILE` | liste de fichiers à la place de `files.txt` (active `-files`) | - |
+| `-dirs` | teste les dossiers de `dirs.txt` et capture les listes de fichiers trouvées | non |
+| `-dirs-wordlist FILE` | liste de dossiers à la place de `dirs.txt` (active `-dirs`) | - |
+| `-exclude CIBLES` | cibles hors périmètre : IP, CIDR, nom ou `*.domaine`, séparées par des virgules (répétable) | - |
+| `-exclude-file FILE` | fichier de cibles hors périmètre, une par ligne (répétable) | - |
+| `-proxy URL` | proxy des pages : `http://hôte:port` ou `socks5://hôte:port` | aucun |
 | `-no-label` | n'inscrit pas hôte:port, URL, code HTTP et date en bas des captures | bandeau inscrit |
 | `-dns DOMAINE` | affiche les enregistrements DNS du domaine (comme dig) et quitte | - |
 | `-dns-server` | serveur DNS pour `-dns`, ex. `1.1.1.1` ou `10.0.0.1:53` | résolveurs du système |
@@ -286,13 +303,76 @@ Après le scan, chaque IP derrière les services trouvés est enrichie :
 Seules les IP **publiques** sont envoyées à Shodan et LeakIX ; les IP internes ne quittent jamais le poste.
 Désactivable avec `-no-enrich` ou la case de l'interface.
 
+## 🔬 Analyse des pages
+
+Pendant la capture, NetShot lit ce que chaque page révèle, sans scan supplémentaire (seule requête en
+plus : le favicon). Désactivable avec `-no-analyze`.
+
+| Analyse | Ce qui est relevé |
+|---|---|
+| **Technologies** | serveur, langage, CMS, framework, équipement (FortiGate, NetScaler, BIG-IP…) et version, lus dans les en-têtes (`Server`, `X-Powered-By`…), les cookies, la balise `generator`, les scripts et le HTML. Avec l'enrichissement, les CVE de chaque version sont cherchées dans **NVD** puis classées avec CISA KEV et EPSS. Seuls le produit et la version partent vers NVD, jamais une adresse. Sans clé NVD : ~7 s par version ; avec la clé gratuite `nvd` : moins d'une seconde |
+| **Pages sensibles** | `index-of` (liste de fichiers : « Index of / », « Directory listing for », IIS), `debug` (trace d'erreur, debug Django / Werkzeug, phpinfo), `default` (page par défaut Apache, IIS, nginx, Tomcat…), `admin` (interface d'administration), `login` (champ mot de passe), `auth-http` (401) |
+| **Favicon** | hash MurmurHash3 identique au filtre Shodan `http.favicon.hash`, avec un lien de recherche Shodan |
+| **Pages similaires** | hash perceptuel de chaque capture : les pages identiques sont regroupées et une case du rapport masque les doublons (jamais une page sensible) |
+| **En-têtes de sécurité** | HSTS, CSP, anti-clickjacking, `nosniff`, `Referrer-Policy` absents, version divulguée, cookies sans `Secure` / `HttpOnly` / `SameSite`, mot de passe saisi en HTTP clair |
+
+Les versions lues dans les en-têtes sont indicatives : un serveur peut masquer ou mentir sur sa
+version, et une distribution peut corriger une faille sans changer le numéro (rétroportage).
+
+## 🕳️ Reconnaissance approfondie
+
+| Analyse | Requêtes en plus | Ce qui est relevé |
+|---|---|---|
+| **Fichiers sensibles** (`-files`, désactivé par défaut) | ~65 par service web | `.env`, `.git/HEAD`, `.svn`, `.DS_Store`, `.htpasswd`, `web.config.bak`, `wp-config.php.bak`, clés SSH, sauvegardes `.zip` / `.sql`, `phpinfo`, `server-status`, Spring `actuator/env`, `elmah.axd`, Swagger… Chaque réponse doit contenir la signature du fichier : une page 404 personnalisée ne donne pas de faux positif. Seuls les 64 premiers Ko sont lus. Liste : `files.txt` (intégrée à l'exe) ou `-files-wordlist fichier` (chemin, gravité, signature séparés par une tabulation) |
+| **Dossiers courants** (`-dirs`, désactivé par défaut) | ~95 par service web | `backup/`, `uploads/`, `logs/`, `.git/`… : les dossiers qui affichent une liste de fichiers sont capturés (tag `index-of`). Liste : `dirs.txt` ou `-dirs-wordlist fichier` |
+| **JavaScript** | aucune | scripts du site chargés par la page et scripts en ligne : chemins d'API (`/api/…`, `/internal/…`), URL internes (IP privées, `.local`, `.corp`…), secrets (clés AWS, Google, Slack, GitHub, Stripe, JWT, chaînes de connexion, `client_secret`…). Les secrets sont **masqués** partout (`AKIA…MPLE`) avec le fichier et la ligne pour vérifier |
+| **robots.txt, sitemap.xml, security.txt** | 3 par service web | chemins que le site demande de ne pas indexer (liens cliquables), nombre d'URL du sitemap, contacts sécurité |
+| **Prise de contrôle de sous-domaine** | DNS seulement | nom dont le CNAME pointe vers un service cloud qui n'existe plus (S3, Azure, GitHub Pages, Heroku, Shopify, Fastly… : NXDOMAIN ou page « ressource inexistante ») |
+| **Services non web** | 1 ou 2 connexions par port ouvert sans page web | bannière (SSH, FTP, SMTP, POP, IMAP, MySQL / MariaDB, Redis, VNC, Telnet, RDP) ; la version part dans les technologies, donc dans la recherche de CVE |
+| **Identifiants par défaut** | aucune | rappel des identifiants par défaut connus de chaque techno trouvée (Tomcat, Grafana, RabbitMQ, NetScaler, BIG-IP…). **Rien n'est essayé** : c'est une liste à vérifier à la main, dans le cadre autorisé |
+
+**Préréglages de ports** : `-p web` (une centaine de ports web : 81, 3000, 5000, 8081, 8888, 9090,
+10000…), `-p services` (SSH, FTP, Telnet, SMTP, POP, IMAP, LDAP, bases de données, RDP, VNC, Redis,
+MongoDB…), mélangeables : `-p web,services,8443`.
+
+```bash
+netshot 10.0.0.0/24 -p web,services -files -dirs
+```
+
+## 🎯 Périmètre et proxy
+
+**Hors périmètre** : les cibles exclues par contrat ne sont jamais testées. IP, plage CIDR, nom
+d'hôte ou `*.domaine` (tous les sous-domaines). Un nom qui pointe vers une plage exclue est exclu
+aussi. Les cibles retirées sont listées dans le journal.
+
+```bash
+netshot 10.0.0.0/16 -exclude "10.0.5.0/24, prod-db.exemple.fr, *.partenaire.fr"
+netshot -f cibles.txt -exclude-file hors_perimetre.txt
+```
+
+**Proxy** : `-proxy http://127.0.0.1:8080` (Burp, ZAP : tout le trafic web est tracé) ou
+`-proxy socks5://hôte:1080` (rebond). Les pages, favicons, dossiers et fichiers passent par le
+proxy. Le test des ports passe par le proxy SOCKS5 ; avec un proxy HTTP il reste direct (la réponse
+d'un proxy HTTP ne dit rien de l'état du port). L'analyse TLS, l'enrichissement et NVD restent
+directs. Proxy HTTP avec mot de passe : `http://user:motdepasse@hôte:port`. Edge envoie aussi un
+peu de trafic Microsoft de fond par le proxy : il apparaît dans Burp.
+
 ## 📊 Résultats
 
 - un PNG par service et par user agent : `<hôte>_<port>_<http|https>[_<ua>].png` ;
 - `report.html` : captures groupées par `hôte:port`. Un badge orange signale les services dont
   la réponse change selon l'UA (code HTTP, titre, redirection, échec, taille de page qui varie
-  de plus de 20 %). Une case à cocher n'affiche que ces services ;
-- `results.csv` : host, port, ua, url, status, title, final_url, size, file, error ;
+  de plus de 20 %). Une case à cocher n'affiche que ces services. Une barre de filtres reste en
+  haut de l'écran : recherche (URL, titre, techno, tag), code HTTP, repère et technologie. En tête :
+  prises de contrôle possibles, fichiers exposés, pages sensibles, JavaScript, technologies,
+  services non web, robots / sitemap, en-têtes de sécurité, pages similaires ;
+- `results.csv` : host, port, ua, url, status, title, final_url, size, file, error, tags, tech,
+  favicon_hash, header_issues, visual_group ;
+- `technologies.csv` : technologies et versions trouvées, URL concernées, CVE, KEV, EPSS et CVSS max ;
+- `results.xlsx` : un onglet par thème (Services, Pages sensibles, Technologies, En-têtes, Fichiers
+  exposés, JavaScript, Takeover, Services non web, robots et sitemap, Exposition), avec filtres et
+  en-tête figé, prêt pour un suivi des écarts ;
+- `results.json` : tout le scan pour un autre outil ;
 - avec l'enrichissement : un tableau « Exposition » en tête du rapport (IP les plus critiques
   d'abord), une ligne de synthèse sous chaque service, et `exposure.csv` (ip, noms, ports, CPE,
   CVE, CVE dans KEV, EPSS max, LeakIX).

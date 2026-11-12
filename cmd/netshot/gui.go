@@ -56,6 +56,10 @@ type startRequest struct {
 	Enrich         bool     `json:"enrich"`
 	TLS            bool     `json:"tls"`
 	Label          bool     `json:"label"`
+	Dirs           bool     `json:"dirs"`
+	Files          bool     `json:"files"`
+	Proxy          string   `json:"proxy"`
+	Exclude        string   `json:"exclude"`
 	Confirm        bool     `json:"confirm"`
 }
 
@@ -363,7 +367,20 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		Label:          req.Label,
 		TLS:            req.TLS,
 		Keys:           loadKeys(),
+		Analyze:        true,
 	}
+	if req.Dirs {
+		opt.Dirs = dirWords(nil)
+	}
+	if req.Files {
+		opt.Files = fileRules(nil)
+	}
+	proxy, err := parseProxy(req.Proxy)
+	if err != nil {
+		return nil, Options{}, "", fmt.Errorf("Proxy invalide : %v", err)
+	}
+	opt.Proxy = proxy
+	opt.Exclusions = newExclusions(strings.Fields(strings.NewReplacer(",", " ", "\n", " ", "\r", " ").Replace(req.Exclude)))
 	confirm := ""
 	if tests := len(hosts) * len(ports); tests > 5000 {
 		confirm = fmt.Sprintf("%d hôtes x %d ports = %d tests (x %d UA pour les services trouvés).\nContinuer ?",

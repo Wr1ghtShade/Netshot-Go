@@ -53,23 +53,39 @@ func findDifferences(group []Result) []string {
 	return diffs
 }
 
-func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResult, outdir string) error {
+// sortResults orders by host then port (stable: the user agents keep their order).
+func sortResults(results []Result) {
 	sort.SliceStable(results, func(i, j int) bool {
 		if results[i].Host != results[j].Host {
 			return results[i].Host < results[j].Host
 		}
 		return results[i].Port < results[j].Port
 	})
+}
+
+func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResult, outdir string,
+	inv []*TechEntry, visualGroups [][]int, takeovers []Takeover) error {
+	sortResults(results) // already sorted when groups were computed: indexes stay valid
+	firsts := map[int]bool{}
+	for _, g := range visualGroups {
+		firsts[g[0]] = true
+	}
+	for i := range results {
+		// A sensitive page is never hidden as a visual duplicate (near-blank listings look alike)
+		results[i].Dup = results[i].Group > 0 && !firsts[i] && len(results[i].Tags) == 0
+	}
 
 	f, err := os.Create(filepath.Join(outdir, "results.csv"))
 	if err != nil {
 		return err
 	}
 	w := csv.NewWriter(f)
-	w.Write([]string{"host", "port", "ua", "url", "status", "title", "final_url", "size", "file", "error"})
+	w.Write([]string{"host", "port", "ua", "url", "status", "title", "final_url", "size", "file", "error",
+		"tags", "tech", "favicon_hash", "header_issues", "visual_group"})
 	for _, r := range results {
 		w.Write([]string{r.Host, strconv.Itoa(r.Port), r.UA, r.URL, itoaOrEmpty(r.Status), r.Title,
-			r.FinalURL, itoaOrEmpty(r.Size), r.File, r.Error})
+			r.FinalURL, itoaOrEmpty(r.Size), r.File, r.Error, strings.Join(r.Tags, " "),
+			strings.Join(techLabels(r.Tech), "; "), r.FaviconHash, strings.Join(r.HeaderIssues, "; "), itoaOrEmpty(r.Group)})
 	}
 	w.Flush()
 	f.Close()
@@ -91,7 +107,18 @@ func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResul
 			order = append(order, k)
 		}
 		groups[k] = append(groups[k], r)
-		multiUA = multiUA || len(groups[k]) > 1
+	}
+	samePage := func(g []Result) []Result { // -dirs captures are other pages, not other user agents
+		var out []Result
+		for _, r := range g {
+			if !r.Dir {
+				out = append(out, r)
+			}
+		}
+		return out
+	}
+	for _, g := range groups {
+		multiUA = multiUA || len(samePage(g)) > 1
 	}
 
 	e := html.EscapeString
@@ -108,13 +135,20 @@ func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResul
 	for _, k := range order {
 		group := groups[k]
 		var diffs []string
-		if len(group) > 1 {
-			diffs = findDifferences(group)
+		if sp := samePage(group); len(sp) > 1 {
+			diffs = findDifferences(sp)
 		}
 		class, badge := "same", ""
+		allDup := true
+		for _, r := range group {
+			allDup = allDup && r.Dup
+		}
+		if allDup {
+			class += " alldup"
+		}
 		if len(diffs) > 0 {
 			nDiff++
-			class = "has-diff"
+			class = strings.Replace(class, "same", "has-diff", 1)
 			badge = fmt.Sprintf(`<span class="diff">differs: %s</span>`, e(strings.Join(diffs, ", ")))
 		}
 		fmt.Fprintf(&sb, `<section class="%s"><h2>%s:%d %s</h2>`, class, e(k.host), k.port, badge)
@@ -126,6 +160,16 @@ func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResul
 			img := fmt.Sprintf(`<div class="err">%s</div>`, e(r.Error))
 			if r.File != "" {
 				img = fmt.Sprintf(`<a href="%s"><img src="%s" loading="lazy"></a>`, e(r.File), e(r.File))
+			} else if r.Service != "" || r.Banner != "" {
+				svc := r.Service
+				if svc == "" {
+					svc = "service"
+				}
+				img = fmt.Sprintf(`<div class="err" style="color:#333"><b>%s %s</b><br><code>%s</code></div>`, e(svc), e(r.ServiceVersion), e(r.Banner))
+			}
+			dup := ""
+			if r.Dup {
+				dup = " dup"
 			}
 			ua := ""
 			if multiUA {
@@ -135,8 +179,8 @@ func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResul
 			if r.Size > 0 {
 				size = fmt.Sprintf(` <span class="size">%d KB</span>`, r.Size/1024)
 			}
-			fmt.Fprintf(&sb, `<div class="card">%s<div class="meta">%s<a href="%s">%s</a><br><b>%s</b> %s%s</div></div>`,
-				img, ua, e(r.URL), e(r.URL), itoaOrEmpty(r.Status), e(r.Title), size)
+			fmt.Fprintf(&sb, `<div class="card%s"%s>%s<div class="meta">%s<a href="%s">%s</a><br><b>%s</b> %s%s%s</div></div>`,
+				dup, cardData(r), img, ua, e(r.URL), e(r.URL), itoaOrEmpty(r.Status), e(r.Title), size, cardExtras(r))
 		}
 		sb.WriteString(`</div></section>`)
 	}
@@ -169,21 +213,30 @@ details{margin:8px 0}
 h1.brand{display:flex;align-items:center;gap:10px;margin:0 0 4px}
 h1.brand img{width:36px;height:36px}
 {{TLSCSS}}
+{{WEBCSS}}
 </style></head><body>
 <h1 class="brand"><img src="{{LOGO}}" alt="">NetShot</h1><p>%d services, %d captures - %s</p>
+{{TOP}}
 %s
 {{TLS}}
+{{BOTTOM}}
 %s
 %s
 <script>
 var c=document.getElementById('only');
 if(c)c.onchange=function(){document.body.classList.toggle('only',c.checked)};
+{{FILTERJS}}
 </script></body></html>`, len(order), len(results), time.Now().Format("2006-01-02 15:04"),
 		exposureTable(exposures), filter, sb.String())
 	// The logo is embedded so the report stays a single self-contained file
 	page = strings.ReplaceAll(page, "{{LOGO}}", "data:image/png;base64,"+base64.StdEncoding.EncodeToString(iconPNG))
 	page = strings.Replace(page, "{{TLSCSS}}", tlsCSS, 1)
 	page = strings.Replace(page, "{{TLS}}", tlsSection(tlsResults), 1)
+	page = strings.Replace(page, "{{WEBCSS}}", webCSS+filterCSS+reconCSS, 1)
+	page = strings.Replace(page, "{{TOP}}", takeoverSection(takeovers)+filesSection(results)+sensitiveSection(results)+
+		jsSection(results)+techSection(inv)+bannersSection(results)+wellKnownSection(results), 1)
+	page = strings.Replace(page, "{{BOTTOM}}", headersSection(results)+groupsSection(results, visualGroups)+filterBar(results), 1)
+	page = strings.Replace(page, "{{FILTERJS}}", filterJS, 1)
 	return os.WriteFile(filepath.Join(outdir, "report.html"), []byte(page), 0o644)
 }
 

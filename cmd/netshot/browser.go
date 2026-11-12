@@ -21,7 +21,7 @@ import (
 // relaunches itself into a child process and exits, which chromedp reports as
 // "chrome failed to start" while the real browser keeps running. Polling the debugging
 // port works whatever process ends up serving it.
-func startBrowser(path string, width, height int) (context.Context, func(), error) {
+func startBrowser(path string, width, height int, extra ...string) (context.Context, func(), error) {
 	port, err := freePort()
 	if err != nil {
 		return nil, nil, err
@@ -30,8 +30,8 @@ func startBrowser(path string, width, height int) (context.Context, func(), erro
 	if err != nil {
 		return nil, nil, err
 	}
-	cmd := exec.Command(path,
-		"--headless",
+	args := append([]string{"--headless"}, extra...)
+	cmd := exec.Command(path, append(args,
 		fmt.Sprintf("--remote-debugging-port=%d", port),
 		"--remote-debugging-address=127.0.0.1",
 		"--user-data-dir="+profile,
@@ -48,7 +48,7 @@ func startBrowser(path string, width, height int) (context.Context, func(), erro
 		"--mute-audio",
 		"--hide-scrollbars",
 		"about:blank",
-	)
+	)...)
 	if err := cmd.Start(); err != nil {
 		os.RemoveAll(profile)
 		return nil, nil, err

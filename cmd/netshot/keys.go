@@ -29,6 +29,7 @@ var keySources = []struct {
 	{"leakix", "LeakIX", "https://leakix.net/"},
 	{"shodan", "Shodan", "https://account.shodan.io/"},
 	{"leakcheck", "LeakCheck", "https://leakcheck.io/"},
+	{"nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key"},
 }
 
 // keysPath is keys.json next to the exe (in the current folder if the exe path is unknown).
