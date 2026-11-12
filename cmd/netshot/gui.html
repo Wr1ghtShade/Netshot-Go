@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NetShot</title>
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+/* Themes: every colour of the page comes from these variables. No data-theme = Auto (Windows setting). */
+:root, :root[data-theme="light"] {
+  --bg: #f3f4f6; --panel: #ffffff; --text: #1f2328; --muted: #6b7280; --border: #d0d7de;
+  --accent: #2563eb; --accent-text: #ffffff; --danger: #b42318; --warn: #c2410c; --ok: #15803d;
+  --log-bg: #f8fafc; --log-text: #1f2328; --quit: #dc2626; --quit-hover: #b91c1c;
+  --mono: Consolas, monospace; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #111418; --panel: #1b1f24; --text: #e6e8eb; --muted: #9aa4b2; --border: #30363d;
+    --accent: #3b82f6; --accent-text: #ffffff; --danger: #f87171; --warn: #fb923c; --ok: #4ade80;
+    --log-bg: #0b0e12; --log-text: #d1d9e0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1b1f24; --text: #e6e8eb; --muted: #9aa4b2; --border: #30363d;
+  --accent: #3b82f6; --accent-text: #ffffff; --danger: #f87171; --warn: #fb923c; --ok: #4ade80;
+  --log-bg: #0b0e12; --log-text: #d1d9e0; color-scheme: dark;
+}
+/* Terminal / SOC: blue-black, cyan accent, monospace tables */
+:root[data-theme="terminal"] {
+  --bg: #0b1220; --panel: #0f1a2b; --text: #cbd5e1; --muted: #7c8ba1; --border: #1e2d45;
+  --accent: #22d3ee; --accent-text: #04121a; --danger: #f87171; --warn: #fbbf24; --ok: #4ade80;
+  --log-bg: #060b14; --log-text: #a5f3fc; --quit: #b91c1c; --quit-hover: #991b1b; color-scheme: dark;
+}
+:root[data-theme="terminal"] table.dns, :root[data-theme="terminal"] table.dns td { font-family: var(--mono); }
+:root[data-theme="terminal"] h3 { color: var(--accent); }
+/* Orange: anthracite and orange actions */
+:root[data-theme="orange"] {
+  --bg: #1a1a1a; --panel: #242424; --text: #f2efe9; --muted: #a8a29e; --border: #3a3a3a;
+  --accent: #ff7900; --accent-text: #111111; --danger: #f87171; --warn: #fdba74; --ok: #86efac;
+  --log-bg: #111111; --log-text: #e7e5e4; --quit: #dc2626; --quit-hover: #b91c1c; color-scheme: dark;
+}
+/* Nord: soft blue greys, glacier blue accent */
+:root[data-theme="nord"] {
+  --bg: #2e3440; --panel: #3b4252; --text: #eceff4; --muted: #a3acbd; --border: #4c566a;
+  --accent: #88c0d0; --accent-text: #2e3440; --danger: #bf616a; --warn: #d08770; --ok: #a3be8c;
+  --log-bg: #242933; --log-text: #d8dee9; --quit: #bf616a; --quit-hover: #a5525b; color-scheme: dark;
+}
+#theme-select { margin-bottom: 6px; margin-right: 6px; max-width: 170px; }
+nav.tabs .tab-btn { white-space: nowrap; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
+/* Window split in two: tabs on top, log + preview below (compact: at least 140 px). The Scan tab
+   stretches its targets box and user agent list to fill its half, so no empty space remains;
+   on a small window the tab content scrolls inside. */
+main { display: grid; gap: 10px; padding: 10px 12px 12px; height: 100vh;
+       grid-template-rows: auto minmax(0, 1fr) minmax(140px, 0.3fr); } /* compact journal / capture */
+/* Whois tab: the whole height, no log or capture below */
+main.no-bottom { grid-template-rows: auto minmax(0, 1fr); }
+/* Scan: taller journal and capture (original layout) */
+main.tall-bottom { grid-template-rows: auto minmax(0, 1fr) minmax(220px, 0.8fr); }
+main.no-bottom .bottom { display: none; }
+/* Every tab but Scan: the journal alone, over the full width */
+main.log-only .bottom { grid-template-columns: 1fr; }
+main.log-only .bottom > .preview { display: none; }
+/* Domaine: the list of names takes all the height left and scrolls on its own */
+#tab-subs > .panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+#ct-result:not([hidden]) { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+#ct-names { flex: 1 1 0; min-height: 80px; max-height: none; }
+/* Whois: the query, title and findings stay in place; only the two columns scroll, each on its own */
+#tab-whois > .panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+#whois-result:not([hidden]) { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.whois-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 6px; flex: 1 1 0; min-height: 0; }
+.whois-col { display: flex; flex-direction: column; min-height: 0; }
+.whois-scroll { flex: 1 1 0; min-height: 0; overflow: auto; }
+.whois-grid table.dns { margin-top: 0; }
+.whois-grid td.data { white-space: normal; word-break: normal; overflow-wrap: anywhere; }
+#whois-raw { max-height: none; margin-top: 0; }
+@media (max-width: 760px) { .whois-grid { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px; min-width: 0; }
+h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+textarea, input, button, select { font: inherit; color: var(--text); }
+select { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; }
+textarea, input[type=text], input[type=number], input[type=password] {
+  width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; }
+textarea { font-family: Consolas, monospace; font-size: 13px; resize: vertical; min-height: 110px; }
+.row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.row label { color: var(--muted); white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
+.row label.off { opacity: .6; }
+.row .grow { flex: 1; min-width: 160px; }
+.num { width: 80px !important; }
+button { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.stop { color: var(--danger); }
+button.quit { background: var(--quit); color: #ffffff; border-color: var(--quit); font-weight: 600; }
+button.quit:hover:not(:disabled) { background: var(--quit-hover); border-color: var(--quit-hover); }
+.hint { color: var(--muted); font-size: 12px; word-break: break-all; }
+/* Copier / Reset pairs */
+.head { display: flex; align-items: center; gap: 8px; }
+.head h3 { margin: 0 0 6px; }
+.tools { display: inline-flex; gap: 4px; margin-left: auto; }
+.tools button { padding: 2px 10px; font-size: 12px; }
+.row .tools { margin-left: 0; }
+
+/* Tab bar */
+nav.tabs { display: flex; gap: 4px; align-items: flex-end; border-bottom: 1px solid var(--border); }
+nav.tabs .tab-btn { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: none;
+                    padding: 8px 14px; color: var(--muted); margin-bottom: -1px; }
+nav.tabs .tab-btn.active { background: var(--panel); border-color: var(--border); color: var(--text); font-weight: 600; }
+nav.tabs .tab-btn .count { font-size: 11px; color: var(--muted); font-weight: normal; }
+nav.tabs .tab-btn .ico { margin-right: 6px; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+nav.tabs .spacer { flex: 1; }
+nav.tabs .brand { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700;
+                  letter-spacing: .01em; margin: 0 14px 6px 2px; }
+nav.tabs .brand img { width: 26px; height: 26px; }
+nav.tabs .quit { margin-bottom: 6px; }
+.tab-area { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+.tab { display: none; }
+/* Fill exactly the tab area. Below 410 px (small window) the Scan tab stops shrinking and
+   the tab area scrolls instead of squashing it */
+.tab.active { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
+#tab-scan.active { min-height: 410px; }
+
+/* Scan tab: the targets box and the user agent list grow with the window */
+.scan-grid { display: grid; grid-template-columns: 1fr 280px; gap: 12px; flex: 1 1 0; min-height: 0; }
+.scan-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
+/* height: 0 + flex: 1 = take the free space without imposing their content height
+   (the 15 user agents would otherwise push the tab past the window) */
+#targets { flex: 1; height: 0; min-height: 110px; }
+#ua-list { flex: 1; height: 0; min-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: var(--bg); }
+#ua-list label { display: flex; gap: 6px; align-items: center; padding: 2px 4px; cursor: pointer; border-radius: 4px; }
+#ua-list label:hover { background: var(--panel); }
+.tag { font-size: 11px; color: var(--muted); margin-left: auto; }
+.ua-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px; }
+.ua-buttons button { padding: 4px 0; font-size: 12px; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.actions .spacer { flex: 1; min-width: 160px; }
+progress { width: 100%; height: 10px; accent-color: var(--accent); }
+#status { color: var(--muted); font-size: 13px; }
+
+/* Lists of results (subdomains, DNS) */
+.result { margin-top: 10px; }
+pre.names { max-height: 260px; overflow: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+            padding: 8px; font: 12px/1.45 Consolas, monospace; margin: 6px 0 0; white-space: pre-wrap; }
+table.dns { border-collapse: collapse; width: 100%; font: 12px/1.4 Consolas, monospace; margin-top: 6px; }
+table.dns th, table.dns td { border-bottom: 1px solid var(--border); padding: 3px 6px; text-align: left; vertical-align: top; }
+table.dns th { font-family: "Segoe UI", system-ui, sans-serif; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+table.dns td.data { word-break: break-all; }
+table.dns td.type { font-weight: 600; white-space: nowrap; }
+ul.findings { margin: 6px 0 0; padding-left: 18px; }
+ul.findings li.warn { color: var(--warn); }
+ul.findings li.good { color: var(--ok); }
+.key-label { min-width: 130px; }
+/* Certificates tab */
+table.tls td { font-family: "Segoe UI", system-ui, sans-serif; }
+table.tls tr.main { cursor: pointer; }
+table.tls tr.main:hover { background: var(--bg); }
+.grade { display: inline-block; min-width: 30px; text-align: center; border-radius: 4px; padding: 1px 6px; color: #fff; font-weight: 700; }
+.gA { background: #15803d; } .gB { background: #65a30d; } .gC { background: #ca8a04; } .gT { background: #c2410c; } .gF { background: #b91c1c; } .g- { background: #6b7280; }
+.yes { color: var(--ok); font-weight: 600; } .bad { color: var(--danger); font-weight: 700; } .soon { color: var(--warn); font-weight: 600; } .off { color: var(--muted); }
+tr.detail td { background: var(--bg); font-size: 12px; }
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.detail-grid h4 { margin: 4px 0; font-size: 12px; color: var(--muted); text-transform: uppercase; }
+.cipher { font-family: Consolas, monospace; font-size: 12px; }
+.cipher.insecure { color: var(--danger); font-weight: 700; } .cipher.weak { color: var(--warn); } .cipher.strong { color: var(--ok); }
+#keys-list a { color: var(--accent); font-size: 12px; }
+/* Leaks tab: wide table, scrolls sideways */
+.leak-wrap { overflow: auto; max-width: 100%; }
+table.leaks th { cursor: pointer; white-space: nowrap; user-select: none; }
+table.leaks td { white-space: nowrap; }
+
+/* Bottom: shared log + last capture */
+.bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
+.bottom > .panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+#log { flex: 1; min-height: 0; background: var(--log-bg); color: var(--log-text); font: 12px/1.45 Consolas, monospace;
+       overflow: auto; white-space: pre-wrap; word-break: break-all; padding: 8px; border-radius: 6px; margin: 0;
+       border: 1px solid var(--border); }
+#preview-info { font-size: 12px; color: var(--muted); word-break: break-all; min-height: 18px; margin-bottom: 4px; }
+#preview-box { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center;
+               background: var(--bg); border-radius: 6px; overflow: hidden; }
+#preview-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; display: none; }
+#preview-box span { color: var(--muted); }
+.err { color: var(--danger); }
+@media (max-width: 760px) {
+  main { height: auto; grid-template-rows: none; }
+  .scan-grid, .bottom { grid-template-columns: 1fr; }
+  #log { flex: none; height: 260px; }
+  #preview-box { flex: none; height: 240px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <nav class="tabs">
+    <span class="brand"><img src="icon.png" alt="">NetShot</span>
+    <!-- Order follows the workflow: find the names, scan them, then look at DNS and certificates -->
+    <button class="tab-btn active" data-tab="subs"><span class="ico">🌐</span>Domaine</button>
+    <button class="tab-btn" data-tab="scan"><span class="ico">📸</span>Scan <span class="count" id="targets-count"></span></button>
+    <button class="tab-btn" data-tab="dns"><span class="ico">🧭</span>DNS</button>
+    <button class="tab-btn" data-tab="whois"><span class="ico">🪪</span>Whois</button>
+    <button class="tab-btn" data-tab="certs"><span class="ico">🔒</span>Certificats <span class="count" id="certs-count"></span></button>
+    <button class="tab-btn" data-tab="leaks"><span class="ico">🔓</span>Leaks <span class="count" id="leaks-count"></span></button>
+    <button class="tab-btn" data-tab="keys"><span class="ico">🔑</span>Clés API <span class="count" id="keys-count"></span></button>
+    <span class="spacer"></span>
+    <select id="theme-select" title="Thème de l'interface (gardé pour la prochaine ouverture)">
+      <option value="auto">Thème : Auto (Windows)</option>
+      <option value="light">Clair</option>
+      <option value="dark">Sombre</option>
+      <option value="terminal">Terminal / SOC</option>
+      <option value="orange">Orange</option>
+      <option value="nord">Nord</option>
+    </select>
+    <button id="quit" class="quit" title="Arrête le programme">Quitter</button>
+  </nav>
+
+  <div class="tab-area">
+    <!-- Scan -->
+    <div class="tab" id="tab-scan">
+      <div class="scan-grid">
+        <section class="panel">
+          <h3>Cibles</h3>
+          <textarea id="targets" placeholder="Une cible par ligne : 192.168.1.10, 10.0.0.0/24, intranet.local, AS3215 (plages de l'AS)&#10;# commentaire"></textarea>
+          <div class="row">
+            <button id="load" title="Liste texte, ou export CSV (Get-ADComputer, certutil / ADCS, CMDB…)">Charger un fichier / CSV…</button>
+            <input type="file" id="file" accept=".txt,.csv,text/plain,text/csv" hidden>
+            <span data-tools="targets"></span>
+            <label for="ports">Ports</label><input type="text" id="ports" class="grow">
+          </div>
+          <div class="row">
+            <label for="output">Dossier de sortie</label><input type="text" id="output" class="grow">
+          </div>
+          <div class="row">
+            <label for="concurrency">Parallèle</label><input type="number" id="concurrency" class="num" value="10" min="1" max="200">
+            <label for="ctimeout">Timeout TCP (s)</label><input type="number" id="ctimeout" class="num" value="1.5" min="0.2" step="0.5">
+            <label for="ptimeout">Timeout page (s)</label><input type="number" id="ptimeout" class="num" value="15" min="1">
+            <label for="delay">Délai entre captures (s)</label><input type="number" id="delay" class="num" value="0" min="0" step="0.5">
+          </div>
+          <div class="row">
+            <label for="resolution">Résolution</label>
+            <select id="resolution">
+              <option value="1366x768">1366 x 768</option>
+              <option value="1920x1080" selected>1920 x 1080 (Full HD)</option>
+              <option value="2560x1440">2560 x 1440</option>
+              <option value="3840x2160">3840 x 2160 (4K)</option>
+              <option value="390x844">390 x 844 (mobile)</option>
+            </select>
+            <label title="IP publiques uniquement : organisation, services, versions et CVE (Shodan avec clé, sinon Shodan InternetDB gratuit), fuites (LeakIX, avec clé), priorisation CISA KEV et EPSS. Les IP internes ne sont jamais envoyées."><input type="checkbox" id="enrich" checked> Enrichir les IP (Shodan, LeakIX, KEV, EPSS)</label>
+            <label title="Après le scan, analyse le certificat et la configuration TLS de chaque service https trouvé (résultats dans l'onglet Certificats et le rapport)"><input type="checkbox" id="tls-scan" checked> Analyser les certificats TLS</label>
+            <label title="Écrit hôte:port, URL, code HTTP et date en bas de chaque capture"><input type="checkbox" id="label-shots" checked> Inscrire l'URL sur les captures</label>
+          </div>
+        </section>
+        <section class="panel">
+          <h3>User agents</h3>
+          <div id="ua-list"></div>
+          <div class="ua-buttons">
+            <button data-sel="nav">Navig.</button><button data-sel="bot">Bots</button>
+            <button data-sel="all">Tous</button><button data-sel="none">Aucun</button>
+          </div>
+          <div class="row"><input type="text" id="custom-ua" placeholder="UA personnalisé (optionnel)"></div>
+        </section>
+      </div>
+      <section class="actions panel">
+        <button id="start" class="primary">Lancer le scan</button>
+        <button id="stop" class="stop" disabled>Arrêter</button>
+        <div class="spacer"><progress id="progress" value="0" max="1"></progress>
+          <div id="status">Prêt. Aucun UA coché = UA du navigateur.</div></div>
+        <button id="open-folder" disabled>Ouvrir le dossier</button>
+        <button id="open-report" disabled>Ouvrir le rapport</button>
+      </section>
+    </div>
+
+    <!-- Subdomains -->
+    <div class="tab active" id="tab-subs">
+      <section class="panel">
+        <h3>Domaine : sous-domaines depuis des sources passives (logs CT, DNS passif, archives)</h3>
+        <div class="row">
+          <label for="ct-domains">Domaines</label>
+          <input type="text" id="ct-domains" class="grow" placeholder="exemple.fr, autre.com">
+          <button id="ct-run" class="primary">Rechercher</button>
+        </div>
+        <div class="row" id="ct-sources"></div>
+        <div class="row">
+          <label title="Ignore les noms qui n'existent plus dans le DNS"><input type="checkbox" id="ct-resolve" checked> seulement les noms qui résolvent</label>
+          <label title="Garde les noms qui pointent vers 10.x, 172.16-31.x, 192.168.x…"><input type="checkbox" id="ct-private"> seulement IP privées</label>
+        </div>
+        <p class="hint">Les sources marquées 🔑 demandent une clé gratuite (onglet Clés API). Les noms trouvés sont ajoutés aux cibles de l'onglet Scan.</p>
+        <div class="result" id="ct-result" hidden>
+          <div class="head"><h3 id="ct-title"></h3><span data-tools="subs"></span></div>
+          <pre class="names" id="ct-names"></pre>
+        </div>
+      </section>
+    </div>
+
+    <!-- DNS -->
+    <div class="tab" id="tab-dns">
+      <section class="panel">
+        <h3>Enregistrements DNS d'un domaine (comme dig)</h3>
+        <div class="row">
+          <label for="dns-domain">Domaine</label>
+          <input type="text" id="dns-domain" class="grow" placeholder="exemple.fr">
+          <label for="dns-server">Serveur</label>
+          <input type="text" id="dns-server" style="width:180px" placeholder="système (ou 1.1.1.1, 10.0.0.1)">
+          <button id="dns-run" class="primary">Interroger</button>
+        </div>
+        <p class="hint">Une requête ANY est tentée, mais la plupart des serveurs la refusent (RFC 8482) : chaque type est donc aussi interrogé un par un (A, AAAA, NS, SOA, MX, TXT, CAA, DS, DNSKEY, HTTPS, DMARC, MTA-STS, SRV Active Directory et Microsoft 365…).</p>
+        <div class="result" id="dns-result" hidden>
+          <h3 id="dns-title"></h3>
+          <div class="hint" id="dns-any"></div>
+          <ul class="findings" id="dns-findings"></ul>
+          <div class="row">
+            <button id="dns-add">Ajouter les hôtes aux cibles</button>
+            <button id="dns-copy">Copier au format dig</button>
+            <button id="dns-reset">Reset</button>
+          </div>
+          <table class="dns"><thead><tr><th>Nom</th><th>TTL</th><th>Type</th><th>Valeur</th></tr></thead><tbody id="dns-rows"></tbody></table>
+          <div class="hint" id="dns-errors"></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Whois -->
+    <div class="tab" id="tab-whois">
+      <section class="panel">
+        <h3>Whois : propriétaire d'un domaine, d'une IP ou d'un AS</h3>
+        <div class="row">
+          <label for="whois-query">Domaine, IP ou AS</label>
+          <input type="text" id="whois-query" class="grow" placeholder="exemple.fr, 8.8.8.8, AS3215">
+          <button id="whois-run" class="primary">Interroger</button>
+        </div>
+        <p class="hint">RDAP (registre officiel, via HTTPS) pour le tableau et les constats, WHOIS port 43 pour le texte brut (souvent filtré en entreprise). Un sous-domaine est cherché sous son domaine enregistré.</p>
+        <div class="result" id="whois-result" hidden>
+          <div class="head"><h3 id="whois-title"></h3><span data-tools="whois"></span></div>
+          <ul class="findings" id="whois-findings"></ul>
+          <!-- Side by side: summary table on the left, raw WHOIS text on the right -->
+          <div class="whois-grid">
+            <div class="whois-col"><h3>Résumé (RDAP)</h3><div class="whois-scroll"><table class="dns"><thead><tr><th style="width:170px">Champ</th><th>Valeur</th></tr></thead><tbody id="whois-rows"></tbody></table></div></div>
+            <div class="whois-col"><h3>WHOIS brut (port 43)</h3><pre class="names whois-scroll" id="whois-raw"></pre></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Certificates / TLS -->
+    <div class="tab" id="tab-certs">
+      <section class="panel">
+        <h3>Certificats et configuration TLS (comme sslscan)</h3>
+        <div class="row" style="align-items:flex-start">
+          <textarea id="tls-targets" style="min-height:70px;height:70px;flex:1" placeholder="Un point d'accès par ligne : hôte, hôte:port ou URL https (port 443 par défaut)&#10;intranet.local&#10;10.0.0.5:8443"></textarea>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button id="tls-last" title="Reprend les services qui ont répondu en https au dernier scan">Services https du dernier scan</button>
+            <button id="tls-run" class="primary">Analyser</button>
+            <span data-tools="tls-targets"></span>
+          </div>
+        </div>
+        <p class="hint">Pour chaque point d'accès : versions SSLv3 à TLS 1.3, suites de chiffrement acceptées (une par une, dans l'ordre de préférence du serveur), PQC (échange de clés post-quantique X25519MLKEM768), certificat (expiration, clé, signature, émetteur, chaîne, confiance, SAN, OCSP, Certificate Transparency), ALPN et HSTS. Cliquer sur une ligne pour le détail. Un CSV est enregistré dans le dossier de sortie.</p>
+        <div class="result" id="tls-result" hidden>
+          <div class="head"><h3 id="tls-title"></h3><span data-tools="tls"></span></div>
+          <table class="dns tls"><thead><tr><th>Cible</th><th>Note</th><th>Expiration</th><th>SSLv3</th><th>1.0</th><th>1.1</th><th>1.2</th><th>1.3</th><th>PQC</th><th>Clé</th><th>Émetteur</th><th>Confiance</th><th>HSTS</th><th>Alertes</th></tr></thead><tbody id="tls-rows"></tbody></table>
+        </div>
+      </section>
+    </div>
+
+    <!-- Leaks (LeakCheck) -->
+    <div class="tab" id="tab-leaks">
+      <section class="panel">
+        <h3>Fuites de données (LeakCheck)</h3>
+        <div class="row">
+          <label for="leak-query">Recherche</label>
+          <input type="text" id="leak-query" class="grow" placeholder="e-mail, identifiant, téléphone, hash ou domaine">
+          <label for="leak-type">Type</label><select id="leak-type"></select>
+          <label for="leak-limit">Limite</label><input type="number" id="leak-limit" class="num" value="100" min="1" max="1000" step="100">
+          <button id="leak-run" class="primary">Rechercher</button>
+        </div>
+        <div class="row">
+          <label><input type="checkbox" id="leak-show-pw"> Afficher les mots de passe</label>
+        </div>
+        <p class="hint">LeakCheck Pro API v2 (clé dans l'onglet Clés API). Type auto : e-mail, identifiant, téléphone, hash. Domaine : choisir le type domain. Seule la valeur recherchée est envoyée à LeakCheck. Cliquer sur un en-tête pour trier.</p>
+        <div class="result" id="leak-result" hidden>
+          <div class="head"><h3 id="leak-title"></h3><span data-tools="leaks"></span><button id="leak-export" style="padding:2px 10px;font-size:12px">Exporter CSV</button></div>
+          <div class="leak-wrap"><table class="dns leaks"><thead><tr id="leak-head"></tr></thead><tbody id="leak-rows"></tbody></table></div>
+        </div>
+      </section>
+    </div>
+
+    <!-- API keys -->
+    <div class="tab" id="tab-keys">
+      <section class="panel">
+        <h3>Clés API des services gratuits</h3>
+        <p class="hint">Champ vide = garder la clé actuelle, « - » = l'effacer. <span id="keys-path"></span></p>
+        <div id="keys-list"></div>
+        <div class="row"><button id="keys-save" class="primary">Enregistrer les clés</button></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <section class="panel"><div class="head"><h3>Journal</h3><span data-tools="log"></span></div><pre id="log"></pre></section>
+    <section class="panel preview">
+      <h3>Dernière capture</h3>
+      <div id="preview-info"></div>
+      <div id="preview-box"><span>Aucune capture pour l'instant</span><img id="preview" alt="Dernière capture"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let uas = [];
+let previewFile = "";
+let sources = [];
+let keyState = {};
+let keyStateOld = {};
+let lastDNS = null;
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  return r.json();
+}
+
+function log(msg, cls) {
+  const el = $("log");
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+  const line = document.createElement("div");
+  line.textContent = msg;
+  if (cls) line.className = cls;
+  el.appendChild(line);
+  while (el.childElementCount > 3000) el.firstChild.remove(); // keep the page light on big scans
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+// --- Tabs ---------------------------------------------------------------------
+function showTab(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + name));
+  document.querySelector("main").classList.toggle("no-bottom", name === "whois");
+  document.querySelector("main").classList.toggle("tall-bottom", name === "scan");
+  document.querySelector("main").classList.toggle("log-only", name !== "scan"); // capture: Scan tab only
+  try { localStorage.setItem("netshot-tab", name); } catch (e) {}
+}
+document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+
+function countTargets() {
+  const n = $("targets").value.split(/\r?\n/).filter(l => l.split("#")[0].trim()).length;
+  $("targets-count").textContent = n ? `(${n})` : "";
+}
+$("targets").addEventListener("input", countTargets);
+
+// Appends targets to the Scan tab, skipping the ones already there; returns how many were added
+function addTargets(list) {
+  const existing = new Set($("targets").value.split(/\r?\n/).map(l => l.trim()).filter(Boolean));
+  const added = [...new Set(list.map(l => l.trim()).filter(l => l && !existing.has(l)))];
+  if (added.length) {
+    const cur = $("targets").value.trim();
+    $("targets").value = (cur ? cur + "\n" : "") + added.join("\n");
+  }
+  countTargets();
+  return added.length;
+}
+
+// --- Init -----------------------------------------------------------------------
+async function init() {
+  const cfg = await api("api/config");
+  uas = cfg.uas;
+  $("ports").value = cfg.ports;
+  $("output").value = cfg.output;
+  const list = $("ua-list");
+  for (const u of uas) {
+    const lab = document.createElement("label");
+    lab.title = u.value;
+    lab.innerHTML = `<input type="checkbox" value="${u.name}" data-bot="${u.bot}"><span></span><span class="tag">${u.bot ? "bot" : "nav"}</span>`;
+    lab.querySelector("span").textContent = u.name;
+    list.appendChild(lab);
+  }
+  sources = cfg.sources;
+  for (const t of cfg.leakTypes || ["auto"]) $("leak-type").append(new Option(t, t));
+  $("leak-type").value = "domain";
+  $("keys-path").textContent = "Stockées dans " + cfg.keyPath;
+  renderKeys(cfg.keys);
+  let tab = "subs";
+  try { tab = localStorage.getItem("netshot-tab") || "subs"; } catch (e) {}
+  showTab(tab);
+}
+
+// --- Sources and keys ----------------------------------------------------------------
+// Source checkboxes: keyed sources without a key are disabled
+function renderSources() {
+  const box = $("ct-sources");
+  const checked = new Set([...box.querySelectorAll("input:checked")].map(cb => cb.value));
+  const first = box.childElementCount === 0;
+  box.innerHTML = "";
+  for (const s of sources) {
+    const usable = s.key !== "required" || keyState[s.name];
+    const lab = document.createElement("label");
+    lab.title = s.help + (s.key === "required" && !usable ? " - clé requise (gratuite)" : "");
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "ct-src";
+    cb.value = s.name;
+    cb.disabled = !usable;
+    cb.checked = usable && (first ? s.default : checked.has(s.name) || (s.default && !keyStateOld[s.name] && keyState[s.name]));
+    lab.append(cb, " " + s.label + (s.slow ? " (lent)" : "") + (s.key === "required" && !usable ? " 🔑" : ""));
+    if (!usable) lab.classList.add("off");
+    box.appendChild(lab);
+  }
+}
+
+function renderKeys(keys) {
+  keyStateOld = keyState;
+  keyState = Object.fromEntries(keys.map(k => [k.name, k.set]));
+  $("keys-count").textContent = `(${keys.filter(k => k.set).length}/${keys.length})`;
+  const list = $("keys-list");
+  list.innerHTML = "";
+  for (const k of keys) {
+    const row = document.createElement("div");
+    row.className = "row";
+    const lab = document.createElement("label");
+    lab.className = "key-label";
+    lab.textContent = k.label;
+    const input = document.createElement("input");
+    input.type = "password";
+    input.className = "grow";
+    input.dataset.name = k.name;
+    input.autocomplete = "off";
+    input.placeholder = k.set ? "configurée (vide = garder, - = effacer)" : "non configurée";
+    const link = document.createElement("a");
+    link.href = k.url;
+    link.target = "_blank";
+    link.textContent = "obtenir";
+    row.append(lab, input, link);
+    list.appendChild(row);
+  }
+  renderSources();
+}
+
+$("keys-save").onclick = async () => {
+  const body = {};
+  document.querySelectorAll("#keys-list input").forEach(i => { if (i.value.trim()) body[i.dataset.name] = i.value.trim(); });
+  const res = await api("api/keys", body);
+  if (res.error) { alert(res.error); return; }
+  renderKeys(res.keys);
+  log(`[keys] clés enregistrées dans ${res.path}`);
+};
+
+$("ct-run").onclick = async () => {
+  const btn = $("ct-run");
+  btn.disabled = true;
+  btn.textContent = "Recherche…";
+  try {
+    const res = await api("api/ct", {
+      domains: $("ct-domains").value,
+      sources: [...document.querySelectorAll(".ct-src:checked")].map(cb => cb.value),
+      resolve: $("ct-resolve").checked,
+      private: $("ct-private").checked,
+    });
+    if (res.error) { alert(res.error); return; }
+    const names = res.names || [];
+    const added = addTargets(names);
+    $("ct-result").hidden = false;
+    $("ct-title").textContent = `${names.length} nom(s) trouvé(s), ${added} nouveau(x) ajouté(s) aux cibles`;
+    $("ct-names").textContent = names.join("\n");
+    log(`[src] ${added} nom(s) ajouté(s) aux cibles`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Rechercher";
+  }
+};
+
+// --- DNS ----------------------------------------------------------------------------
+function cell(tr, text, cls) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  if (cls) td.className = cls;
+  tr.appendChild(td);
+}
+
+$("dns-run").onclick = async () => {
+  const btn = $("dns-run");
+  btn.disabled = true;
+  btn.textContent = "Requêtes…";
+  try {
+    const res = await api("api/dns", { domain: $("dns-domain").value, server: $("dns-server").value });
+    if (res.error) { alert(res.error); return; }
+    lastDNS = res;
+    const rep = res.report;
+    $("dns-result").hidden = false;
+    $("dns-title").textContent = `${rep.domain} - ${rep.records.length} enregistrements (serveur ${rep.server || "?"})`;
+    $("dns-any").textContent = rep.any_note + (rep.any && rep.any.length ? " : " + rep.any.map(r => r.type + " " + r.data).join(" | ") : "");
+    const ul = $("dns-findings");
+    ul.innerHTML = "";
+    for (const f of rep.findings || []) {
+      const li = document.createElement("li");
+      li.textContent = f;
+      li.className = f.startsWith("⚠") ? "warn" : f.startsWith("✓") ? "good" : "";
+      ul.appendChild(li);
+    }
+    const tbody = $("dns-rows");
+    tbody.innerHTML = "";
+    for (const r of rep.records) {
+      const tr = document.createElement("tr");
+      cell(tr, r.name);
+      cell(tr, r.ttl);
+      cell(tr, r.type, "type");
+      cell(tr, r.data, "data");
+      tbody.appendChild(tr);
+    }
+    $("dns-errors").textContent = (rep.errors || []).length ? "Erreurs : " + rep.errors.join(" · ") : "";
+    log(`[dns] ${rep.domain} : ${rep.records.length} enregistrements, ${(rep.findings || []).filter(f => f.startsWith("⚠")).length} point(s) d'attention`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Interroger";
+  }
+};
+$("dns-domain").addEventListener("keydown", e => { if (e.key === "Enter") $("dns-run").click(); });
+$("dns-add").onclick = () => {
+  if (!lastDNS) return;
+  log(`[dns] ${addTargets(lastDNS.hosts || [])} hôte(s) ajouté(s) aux cibles`);
+};
+$("dns-copy").onclick = async () => {
+  if (!lastDNS) return;
+  try { await navigator.clipboard.writeText(lastDNS.dig); log("[dns] résultat copié au format dig"); }
+  catch (e) { log("[dns] copie impossible : " + e, "err"); }
+};
+
+// --- Whois --------------------------------------------------------------------------------------
+let lastWhois = null;
+$("whois-run").onclick = async () => {
+  const btn = $("whois-run");
+  btn.disabled = true;
+  btn.textContent = "Requêtes…";
+  try {
+    const res = await api("api/whois", { query: $("whois-query").value });
+    if (res.error) { alert(res.error); return; }
+    lastWhois = res;
+    const rep = res.report;
+    const kinds = { domain: "domaine", ip: "adresse IP", autnum: "AS" };
+    const name = rep.name || rep.query;
+    $("whois-result").hidden = false;
+    $("whois-title").textContent = `${name} (${kinds[rep.kind] || "?"})` + (rep.rdap_url ? ` - ${rep.rdap_url}` : "");
+    const ul = $("whois-findings");
+    ul.innerHTML = "";
+    for (const f of rep.findings) {
+      const li = el("li", f.startsWith("⚠") ? "warn" : f.startsWith("✓") ? "good" : "", f);
+      ul.append(li);
+    }
+    for (const e of rep.errors) ul.append(el("li", "warn", "Erreur : " + e));
+    const tbody = $("whois-rows");
+    tbody.innerHTML = "";
+    for (const r of rep.rows) {
+      const tr = el("tr");
+      tr.append(el("td", "type", r.label), el("td", "data", r.value));
+      tbody.append(tr);
+    }
+    $("whois-raw").textContent = rep.raw || "(pas de réponse WHOIS sur le port 43)";
+    const warn = rep.findings.filter(f => f.startsWith("⚠")).length;
+    log(`[whois] ${name} : ${rep.rows.length} champ(s), ${warn} point(s) d'attention` + (rep.errors.length ? `, ${rep.errors.length} erreur(s)` : ""));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Interroger";
+  }
+};
+$("whois-query").addEventListener("keydown", e => { if (e.key === "Enter") $("whois-run").click(); });
+
+// --- Certificates / TLS ---------------------------------------------------------------------
+const tlsRows = new Map(); // target -> result, so live events and the final answer merge
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function renderTLS() {
+  const tbody = $("tls-rows");
+  tbody.innerHTML = "";
+  const order = { F: 0, T: 1, C: 2, B: 3, A: 4, "A+": 5, "-": 6 };
+  const list = [...tlsRows.values()].sort((a, b) => (order[a.grade] ?? 9) - (order[b.grade] ?? 9) || a.target.localeCompare(b.target));
+  for (const r of list) {
+    const tr = el("tr", "main");
+    const cell = (node) => { const td = el("td"); td.append(node); tr.append(td); return td; };
+    cell(r.target);
+    cell(el("span", "grade g" + (r.grade || "-").replace("+", ""), r.grade || "-"));
+    if (r.error) {
+      const td = cell(r.error);
+      td.colSpan = 12;
+      tbody.append(tr);
+      continue;
+    }
+    const c = r.cert;
+    cell(c ? el("span", c.days_left < 0 ? "bad" : c.days_left < 30 ? "soon" : "", `${c.not_after} (${c.days_left} j)`) : "?");
+    for (const p of ["SSLv3", "TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"]) {
+      const on = r.protocols[p];
+      const legacy = p === "SSLv3" || p === "TLS1.0" || p === "TLS1.1";
+      cell(el("span", on ? (legacy ? "bad" : "yes") : "off", on ? "oui" : "non"));
+    }
+    cell(el("span", r.pq ? "yes" : "off", r.pq ? "oui" : "non"));
+    cell(c ? c.key : "");
+    cell(c ? (c.issuer.match(/CN=([^,]+)/) || [, c.issuer])[1] : "");
+    cell(c ? el("span", c.trusted && c.name_match ? "yes" : "bad", c.trusted && c.name_match ? "oui" : (c.self_signed ? "auto-signé" : !c.name_match ? "nom ≠" : "non")) : "");
+    cell(el("span", r.hsts ? "yes" : "off", r.hsts ? "oui" : "non"));
+    const alerts = (r.findings || []).filter(f => f.startsWith("⚠")).length;
+    cell(el("span", alerts ? "bad" : "yes", String(alerts)));
+    const detail = el("tr", "detail");
+    detail.hidden = true;
+    const td = el("td");
+    td.colSpan = 14;
+    td.append(tlsDetail(r));
+    detail.append(td);
+    tr.onclick = () => { detail.hidden = !detail.hidden; };
+    tbody.append(tr, detail);
+  }
+  const n = tlsRows.size;
+  $("certs-count").textContent = n ? `(${n})` : "";
+  $("tls-result").hidden = n === 0;
+  const bad = list.filter(r => ["F", "T", "C"].includes(r.grade)).length;
+  $("tls-title").textContent = `${n} point(s) d'accès analysé(s), ${bad} à corriger (note C, T ou F)`;
+}
+
+function tlsDetail(r) {
+  const box = el("div", "detail-grid");
+  const left = el("div"), right = el("div");
+  const block = (parent, title, lines) => {
+    parent.append(el("h4", "", title));
+    for (const l of lines) parent.append(el("div", "", l));
+  };
+  block(left, "Constats", r.findings || []);
+  block(left, "Négociation", [`${r.negotiated}`, `Groupe : ${r.key_group || "?"}`, `ALPN : ${r.alpn || "-"}`, `IP : ${r.ip}  SNI : ${r.sni || "-"}`, `HSTS : ${r.hsts || "absent"}`]);
+  const c = r.cert;
+  if (c) {
+    block(left, "Certificat", [`Sujet : ${c.subject}`, `Émetteur : ${c.issuer}`, `Validité : ${c.not_before} → ${c.not_after} (${c.days_left} j)`,
+      `Clé : ${c.key}   Signature : ${c.sig_alg}`, `Série : ${c.serial}`, `SHA-256 : ${c.sha256}`,
+      `Confiance : ${c.trusted ? "oui" : "non" + (c.trust_error ? " (" + c.trust_error + ")" : "")}`,
+      `OCSP agrafé : ${c.ocsp_stapled ? "oui" : "non"}   Must-Staple : ${c.must_staple ? "oui" : "non"}   SCT : ${c.sct ? "oui" : "non"}   Wildcard : ${c.wildcard ? "oui" : "non"}`]);
+    block(left, "SAN", [(c.sans || []).join(", ") || "-"]);
+    block(left, "Chaîne", c.chain || []);
+  }
+  right.append(el("h4", "", "Suites de chiffrement (ordre de préférence du serveur)"));
+  for (const p of ["SSLv3", "TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"]) {
+    const list = (r.ciphers || {})[p] || [];
+    if (!list.length) continue;
+    right.append(el("div", "", p));
+    for (const ci of list) right.append(el("div", "cipher " + ci.strength, "   " + ci.name));
+  }
+  box.append(left, right);
+  return box;
+}
+
+$("tls-last").onclick = async () => {
+  const res = await api("api/tls-last");
+  const list = res.targets || [];
+  if (!list.length) { alert("Aucun service https dans le dernier scan (ou pas encore de scan)."); return; }
+  const cur = $("tls-targets").value.trim();
+  const existing = new Set(cur.split(/\r?\n/).map(l => l.trim()));
+  const add = list.filter(t => !existing.has(t));
+  $("tls-targets").value = (cur ? cur + "\n" : "") + add.join("\n");
+  log(`[tls] ${add.length} service(s) https repris du dernier scan`);
+};
+
+$("tls-run").onclick = async () => {
+  const btn = $("tls-run");
+  btn.disabled = true;
+  btn.textContent = "Analyse…";
+  try {
+    const res = await api("api/tls", { targets: $("tls-targets").value, output: $("output").value });
+    if (res.error) { alert(res.error); return; }
+    for (const r of res.results || []) tlsRows.set(r.target, r);
+    renderTLS();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Analyser";
+  }
+};
+
+// --- Leaks (LeakCheck) -------------------------------------------------------------------
+// Columns: the source fields first, then the data fields in this order; any other field
+// LeakCheck returns gets its own column after these, then the list of exposed fields.
+const LEAK_SOURCE_COLS = [["source", "Source"], ["breach_date", "Date fuite"], ["unverified", "Non vérifiée"],
+  ["passwordless", "Sans mot de passe"], ["compilation", "Compilation"]];
+const LEAK_DATA_COLS = { email: "E-mail", username: "Identifiant", password: "Mot de passe", first_name: "Prénom",
+  last_name: "Nom", name: "Nom complet", dob: "Naissance", phone: "Téléphone", address: "Adresse", zip: "Code postal",
+  city: "Ville", country: "Pays", ip: "IP", collected: "Collecté le" };
+const LEAK_MASK = "••••••••"; // fixed length: the length of a password is information too
+let leak = { rows: [], cols: [], sort: null, rev: false, title: "" };
+
+function leakLabel(c) {
+  const s = LEAK_SOURCE_COLS.find(x => x[0] === c);
+  return s ? s[1] : c === "fields" ? "Champs exposés" : LEAK_DATA_COLS[c] || c;
+}
+
+function leakValues(r, showPw) {
+  const src = r.source || {};
+  const flag = v => (v === 1 || v === true || v === "1") ? "oui" : "";
+  const out = [src.name ?? "", src.breach_date ?? "", flag(src.unverified), flag(src.passwordless), flag(src.compilation)];
+  for (const c of leak.cols.slice(LEAK_SOURCE_COLS.length, -1)) {
+    let v = r[c];
+    v = Array.isArray(v) ? v.join(", ") : (v === undefined || v === null) ? "" : String(v);
+    if (c === "password" && v && !showPw) v = LEAK_MASK;
+    out.push(v);
+  }
+  out.push((r.fields || []).join(", "));
+  return out.map(String);
+}
+
+function renderLeaks() {
+  const head = $("leak-head"), tbody = $("leak-rows");
+  head.innerHTML = "";
+  tbody.innerHTML = "";
+  leak.cols.forEach((c, i) => {
+    const th = el("th", "", leakLabel(c) + (leak.sort === i ? (leak.rev ? " ▼" : " ▲") : ""));
+    th.onclick = () => { leak.rev = leak.sort === i ? !leak.rev : false; leak.sort = i; sortLeaks(); renderLeaks(); };
+    head.append(th);
+  });
+  const show = $("leak-show-pw").checked;
+  for (const r of leak.rows) {
+    const tr = el("tr");
+    for (const v of leakValues(r, show)) tr.append(el("td", "", v));
+    tbody.append(tr);
+  }
+  $("leak-result").hidden = leak.cols.length === 0;
+  $("leak-title").textContent = leak.title;
+  $("leaks-count").textContent = leak.rows.length ? `(${leak.rows.length})` : "";
+}
+
+function sortLeaks() {
+  const i = leak.sort;
+  leak.rows.sort((a, b) => leakValues(a, true)[i].localeCompare(leakValues(b, true)[i], "fr", { sensitivity: "base" }) * (leak.rev ? -1 : 1));
+}
+
+// Table as shown (passwords masked unless displayed), headings first
+function leakTable() {
+  const show = $("leak-show-pw").checked;
+  return [leak.cols.map(leakLabel), ...leak.rows.map(r => leakValues(r, show))];
+}
+
+$("leak-run").onclick = async () => {
+  const btn = $("leak-run");
+  btn.disabled = true;
+  btn.textContent = "Recherche…";
+  try {
+    const query = $("leak-query").value.trim();
+    const res = await api("api/leaks", { query, type: $("leak-type").value, limit: parseInt($("leak-limit").value, 10) || 100 });
+    if (res.error) { alert(res.error); return; }
+    const rows = res.result || [];
+    const present = [];
+    for (const r of rows) for (const k of Object.keys(r)) if (k !== "source" && k !== "fields" && !present.includes(k)) present.push(k);
+    const known = Object.keys(LEAK_DATA_COLS).filter(k => present.includes(k));
+    const other = present.filter(k => !(k in LEAK_DATA_COLS)).sort();
+    leak = { rows, cols: [...LEAK_SOURCE_COLS.map(x => x[0]), ...known, ...other, "fields"], sort: null, rev: false,
+      title: `${query} : ${res.found ?? rows.length} trouvé(s), ${rows.length} affiché(s) - quota restant ${res.quota ?? "?"}` };
+    renderLeaks();
+    const nSrc = new Set(rows.map(r => (r.source || {}).name)).size;
+    log(`[leaks] ${query} : ${rows.length} ligne(s), ${nSrc} source(s), ${rows.filter(r => r.password).length} avec mot de passe`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Rechercher";
+  }
+};
+$("leak-query").addEventListener("keydown", e => { if (e.key === "Enter") $("leak-run").click(); });
+$("leak-show-pw").onchange = renderLeaks;
+$("leak-export").onclick = async () => {
+  if (!leak.rows.length) { alert("Aucun résultat à exporter."); return; }
+  const res = await api("api/leaks-export", { output: $("output").value, rows: leakTable() });
+  if (res.error) { alert(res.error); return; }
+  log(`[leaks] ${leak.rows.length} ligne(s) exportée(s) dans ${res.path}` + ($("leak-show-pw").checked ? "" : " (mots de passe masqués)"));
+};
+
+// --- Scan -----------------------------------------------------------------------------
+document.querySelectorAll(".ua-buttons button").forEach(b => b.onclick = () => {
+  const sel = b.dataset.sel;
+  document.querySelectorAll("#ua-list input").forEach(cb => {
+    const bot = cb.dataset.bot === "true";
+    cb.checked = sel === "all" || (sel === "bot" && bot) || (sel === "nav" && !bot);
+  });
+});
+
+$("load").onclick = () => $("file").click();
+$("file").onchange = async () => {
+  const f = $("file").files[0];
+  if (!f) return;
+  const res = await api("api/import", { text: await f.text() });
+  $("file").value = "";
+  if (res.error) { alert(res.error); return; }
+  const n = addTargets(res.targets || []);
+  log(`[import] ${f.name} : ${n} cible(s) ajoutée(s)${res.csv ? " (CSV)" : ""}`);
+};
+
+function setRunning(running) {
+  $("start").disabled = running;
+  $("stop").disabled = !running;
+  if (running) { $("open-folder").disabled = true; $("open-report").disabled = true; }
+}
+
+async function start(confirmed) {
+  const body = {
+    targets: $("targets").value,
+    ports: $("ports").value,
+    concurrency: parseInt($("concurrency").value, 10) || 10,
+    connect_timeout: parseFloat($("ctimeout").value) || 1.5,
+    page_timeout: parseFloat($("ptimeout").value) || 15,
+    delay: parseFloat($("delay").value) || 0,
+    uas: [...document.querySelectorAll("#ua-list input:checked")].map(cb => cb.value),
+    custom_ua: $("custom-ua").value,
+    output: $("output").value,
+    resolution: $("resolution").value,
+    enrich: $("enrich").checked,
+    tls: $("tls-scan").checked,
+    label: $("label-shots").checked,
+    confirm: !!confirmed,
+  };
+  const res = await api("api/start", body);
+  if (res.error) { alert(res.error); return; }
+  if (res.confirm) { if (confirm(res.confirm)) start(true); return; }
+  setRunning(true);
+  $("progress").value = 0;
+  $("status").textContent = "Démarrage…";
+}
+
+$("start").onclick = () => start(false);
+$("stop").onclick = async () => {
+  $("stop").disabled = true;
+  $("status").textContent = "Arrêt en cours…";
+  await api("api/stop", {});
+};
+$("open-folder").onclick = () => api("api/open?what=folder", {});
+$("open-report").onclick = () => api("api/open?what=report", {});
+$("preview").onclick = () => previewFile && api("api/open?what=file&name=" + encodeURIComponent(previewFile), {});
+$("quit").onclick = async () => {
+  if (!$("start").disabled || confirm("Un scan est en cours. Quitter quand même ?")) {
+    await api("api/quit", {}).catch(() => {});
+    document.body.innerHTML = "<p style='padding:20px'>NetShot arrêté. Tu peux fermer cette fenêtre.</p>";
+    window.close();
+  }
+};
+
+const events = new EventSource("api/events");
+events.onmessage = ev => {
+  const { type, data } = JSON.parse(ev.data);
+  if (type === "log") {
+    log(data, data.startsWith("[-]") ? "err" : "");
+  } else if (type === "progress") {
+    const [done, total, found] = data;
+    $("progress").max = Math.max(total, 1);
+    $("progress").value = done;
+    $("status").textContent = `${done}/${total} vérifiés - ${found} services trouvés`;
+  } else if (type === "shot") {
+    previewFile = data.file;
+    const img = $("preview");
+    img.src = "files/" + encodeURIComponent(data.file) + "?t=" + Date.now();
+    img.style.display = "block";
+    $("preview-box").querySelector("span").style.display = "none";
+    $("preview-info").textContent = `${data.url}  [${data.status}]  ${data.title}  - UA : ${data.ua}`;
+  } else if (type === "tls") {
+    tlsRows.set(data.target, data);
+    renderTLS();
+  } else if (type === "done") {
+    setRunning(false);
+    if (data.error) {
+      log("[!] Erreur : " + data.error, "err");
+      $("status").textContent = "Erreur - voir le journal.";
+    } else {
+      $("status").textContent = (data.stopped ? "Arrêté. " : "Terminé. ") + $("status").textContent;
+    }
+    $("open-folder").disabled = !data.report;
+    $("open-report").disabled = !data.report;
+  }
+};
+events.onerror = () => { $("status").textContent = "Connexion perdue avec NetShot (programme fermé ?)"; };
+
+// --- Copier / Reset ----------------------------------------------------------------------
+// Text version of a TLS result, same layout as the command line output
+function tlsText(r) {
+  const out = [`== ${r.target}  (IP ${r.ip}, SNI ${r.sni})  note ${r.grade}`];
+  if (r.error) return out.concat("   " + r.error, "").join("\n");
+  const protos = ["SSLv3", "TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"].filter(p => r.protocols[p]);
+  out.push(`   Protocoles   : ${protos.join(" ")}`, `   Négocié      : ${r.negotiated}  groupe ${r.key_group}  ALPN ${r.alpn}`,
+    `   PQC (X25519MLKEM768) : ${r.pq}`);
+  const c = r.cert;
+  if (c) {
+    out.push(`   Certificat   : ${c.subject}`, `   Émetteur     : ${c.issuer}`,
+      `   Validité     : ${c.not_before} -> ${c.not_after} (${c.days_left} jours restants)`,
+      `   Clé / sig.   : ${c.key} / ${c.sig_alg}`, `   SAN          : ${(c.sans || []).join(", ")}`,
+      `   Confiance    : ${c.trusted}  nom OK ${c.name_match}  auto-signé ${c.self_signed}  OCSP agrafé ${c.ocsp_stapled}  SCT ${c.sct}`);
+    for (const ch of c.chain || []) out.push(`   Chaîne       : ${ch}`);
+  }
+  for (const p of ["SSLv3", "TLS1.0", "TLS1.1", "TLS1.2", "TLS1.3"])
+    for (const ci of (r.ciphers || {})[p] || []) out.push(`   ${p.padEnd(7)} ${ci.strength.padEnd(9)} ${ci.name}`);
+  for (const f of r.findings || []) out.push(`   - ${f}`);
+  return out.join("\n") + "\n";
+}
+
+async function copyText(text) {
+  text = (text || "").trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    log(`[copie] ${text.split("\n").length} ligne(s) copiée(s) dans le presse-papiers`);
+  } catch (e) { log("[copie] impossible : " + e, "err"); }
+}
+
+// Each zone: what "Copier" copies and what "Reset" empties
+const zones = {
+  targets: [() => $("targets").value, () => { $("targets").value = ""; countTargets(); }],
+  log: [() => $("log").innerText, () => { $("log").innerHTML = ""; }],
+  subs: [() => $("ct-names").textContent, () => {
+    $("ct-domains").value = ""; $("ct-names").textContent = ""; $("ct-result").hidden = true; }],
+  "tls-targets": [() => $("tls-targets").value, () => { $("tls-targets").value = ""; }],
+  whois: [() => lastWhois ? lastWhois.text : "", () => {
+    lastWhois = null; $("whois-query").value = ""; $("whois-rows").innerHTML = ""; $("whois-findings").innerHTML = "";
+    $("whois-raw").textContent = ""; $("whois-result").hidden = true; }],
+  tls: [() => [...tlsRows.values()].map(tlsText).join("\n"), () => { tlsRows.clear(); renderTLS(); }],
+  leaks: [() => leak.rows.length ? leakTable().map(r => r.join("\t")).join("\n") : "",
+    () => { leak = { rows: [], cols: [], sort: null, rev: false, title: "" }; $("leak-query").value = ""; renderLeaks(); }],
+};
+document.querySelectorAll("[data-tools]").forEach(span => {
+  const [get, reset] = zones[span.dataset.tools];
+  span.className = "tools";
+  const c = el("button", "", "Copier");
+  c.onclick = () => copyText(get());
+  const r = el("button", "", "Reset");
+  r.onclick = reset;
+  span.append(c, r);
+});
+$("dns-reset").onclick = () => {
+  lastDNS = null;
+  $("dns-domain").value = "";
+  $("dns-rows").innerHTML = "";
+  $("dns-findings").innerHTML = "";
+  $("dns-result").hidden = true;
+};
+
+// --- Theme ---------------------------------------------------------------------------------------
+// The saved theme comes with the page (data-theme on <html>, written by the server from
+// settings.json): the browser's own storage would be lost, the port changes at every launch.
+function setTheme(name) {
+  if (name === "auto") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = name;
+  api("api/theme", { theme: name }).then(r => { if (r.error) log("[theme] " + r.error, "err"); }).catch(() => {});
+}
+$("theme-select").value = document.documentElement.dataset.theme || "auto";
+$("theme-select").onchange = e => setTheme(e.target.value);
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Builds
+dist/
+*.exe
+netshot-linux
+
+# Secrets and local settings: never commit
+keys.json
+keys.json.bak
+keys.json.tmp
+settings.json
+
+# Scan output
+screenshots/
+screenshots_*/
+certificats_*.csv
+fuites_*.csv
