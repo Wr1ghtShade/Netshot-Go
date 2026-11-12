@@ -8,7 +8,7 @@ Un seul exécutable portable, sans installation.
 
 ![NetShot (Go) : onglet Scan après une capture de example.com et example.org](docs/netshot-go.png)
 
-## Organisation du dossier
+## 📁 Organisation du dossier
 
 ```
 netshot-go/
@@ -43,12 +43,12 @@ netshot-go/
 
 `keys.json` (clés API) et `settings.json` (thème) ne sont jamais versionnés (`.gitignore`).
 
-## Prérequis sur le poste qui lance le scan
+## ✅ Prérequis sur le poste qui lance le scan
 
 Rien à installer : `netshot.exe` + Edge ou Chrome (Edge est présent par défaut sur Windows 10/11).
 Le navigateur est détecté automatiquement. Sinon : `-browser "C:\chemin\msedge.exe"`.
 
-## Interface graphique
+## 🖥️ Interface graphique
 
 Double-clic sur `dist\netshot.exe` (ou lancement sans argument).
 L'interface s'ouvre dans une fenêtre Edge/Chrome. Elle est servie en local sur `127.0.0.1`,
@@ -56,7 +56,7 @@ sur un port aléatoire et une adresse contenant un jeton aléatoire : elle n'est
 
 La fenêtre s'ouvre maximisée.
 
-#### Onglets
+#### 🗂️ Onglets
 
 Dans l'ordre du déroulé d'une reconnaissance :
 
@@ -70,7 +70,7 @@ Dans l'ordre du déroulé d'une reconnaissance :
 | **🔓 Leaks** | Fuites de données (LeakCheck, clé requise) : mots de passe masqués par défaut, tri, export CSV. |
 | **🔑 Clés API** | Saisie des clés des services gratuits, avec le lien pour en obtenir une. Seuls les champs remplis sont enregistrés, `-` supprime une clé. |
 
-#### Onglet Scan
+#### 📸 Onglet Scan
 
 - **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier `.txt` ou d'un export `.csv`.
 - **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
@@ -83,7 +83,7 @@ Dans l'ordre du déroulé d'une reconnaissance :
 
 Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `screenshots\` à côté de l'exe).
 
-#### Partout
+#### 🧰 Partout
 
 - **Journal** en bas de chaque onglet, sauf Whois.
 - Boutons **Copier** et **Reset** sur les zones de texte, les tableaux et le journal.
@@ -91,13 +91,13 @@ Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par d
   Clair, Sombre, Terminal / SOC (bleu nuit, accent cyan, tableaux en police fixe), Orange (anthracite et
   orange), Nord (gris bleutés doux).
 
-#### Fermeture
+#### 🚪 Fermeture
 
 - Fermer la fenêtre arrête le programme au bout de 10 secondes ; un scan en cours est arrêté proprement
   et son rapport écrit. Recharger la page ne l'arrête pas.
 - La fenêtre console affichée à côté sert de journal technique ; la fermer arrête aussi le programme.
 
-## Ligne de commande
+## ⌨️ Ligne de commande
 
 ```
 netshot.exe 192.168.1.0/24
@@ -152,7 +152,7 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 
 `Ctrl+C` arrête le scan et écrit quand même le rapport.
 
-## Sources passives de sous-domaines
+## 🔎 Sources passives de sous-domaines
 
 Toutes gratuites. Seul le nom de domaine leur est envoyé, rien n'est envoyé aux cibles.
 
@@ -178,7 +178,7 @@ pratique pour cibler les services internes publiés avec un certificat public.
 
 Anubis (jldc.me) n'est pas inclus : le service ne répond plus.
 
-## DNS d'un domaine (comme dig)
+## 🧭 DNS d'un domaine (comme dig)
 
 `-dns exemple.fr` (ou l'onglet DNS) interroge le domaine comme `dig`, avec un client DNS intégré,
 sans outil externe :
@@ -197,7 +197,7 @@ est tronquée ou vide (certains résolveurs comme 1.1.1.1 abandonnent les gros T
 Constats affichés : SPF (absent, multiple, `+all`, `~all`, `-all`), DMARC (absent, `p=none`,
 `quarantine`, `reject`), CAA, DNSSEC (DS publié), MTA-STS, enregistrements Active Directory visibles.
 
-## Whois d'un domaine, d'une IP ou d'un AS
+## 🪪 Whois d'un domaine, d'une IP ou d'un AS
 
 `-whois exemple.fr` (ou l'onglet Whois) interroge deux sources en parallèle, sans outil externe :
 
@@ -211,7 +211,7 @@ Un sous-domaine est cherché sous son domaine enregistré. Constats pour un doma
 proche ou dépassée, verrou de transfert (absent = détournement plus facile), verrou du registre,
 DNSSEC, titulaire masqué. Même résultat que la version Python.
 
-## Certificats et configuration TLS (comme sslscan)
+## 🔒 Certificats et configuration TLS (comme sslscan)
 
 `-tls hôte:port`, `-tls-scan` ou l'onglet Certificats. Pour chaque point d'accès :
 
@@ -237,7 +237,7 @@ Alertes à 30 et 15 jours de l'expiration.
 Non couvert : vulnérabilités spécifiques (Heartbleed, ROBOT, renégociation, compression),
 taille des paramètres DH.
 
-## Clés API
+## 🔑 Clés API
 
 Comptes gratuits. Les clés sont dans **`keys.json`, à côté de l'exe**. S'il manque au lancement, un
 modèle vide est créé ; un `keys.json` existant n'est jamais écrasé. À l'enregistrement, seuls les
@@ -252,12 +252,12 @@ viewdns, leakix.
 Non inclus : SecurityTrails (plus de formule gratuite). ViewDNS passe uniquement par son API officielle
 (la page web est protégée par un contrôle anti-robot Cloudflare).
 
-## Plages d'IP d'un AS
+## 🌍 Plages d'IP d'un AS
 
 Une cible `AS1234` est remplacée par les plages IPv4 annoncées par cet AS, lues dans RIPEstat
 (gratuit, sans clé). La limite `-max-hosts` s'applique ensuite : un gros AS dépasse vite 65 536 adresses.
 
-## Import CSV (AD, ADCS, CMDB)
+## 📄 Import CSV (AD, ADCS, CMDB)
 
 `-f` et le bouton « Charger un fichier / CSV » acceptent un export CSV (séparateur `,` ou `;`).
 Les colonnes dont le nom ressemble à un hôte sont lues (DNSHostName, Common Name, Subject Alternative
@@ -271,7 +271,7 @@ certutil -view -restrict "Disposition=20" -out "CommonName,SAN" csv > adcs.csv
 Les certificats émis par l'autorité interne (ADCS) sont l'équivalent interne des logs CT :
 ils listent les noms des services internes protégés par TLS.
 
-## Enrichissement des IP
+## 🛰️ Enrichissement des IP
 
 Après le scan, chaque IP derrière les services trouvés est enrichie :
 
@@ -286,7 +286,7 @@ Après le scan, chaque IP derrière les services trouvés est enrichie :
 Seules les IP **publiques** sont envoyées à Shodan et LeakIX ; les IP internes ne quittent jamais le poste.
 Désactivable avec `-no-enrich` ou la case de l'interface.
 
-## Résultats
+## 📊 Résultats
 
 - un PNG par service et par user agent : `<hôte>_<port>_<http|https>[_<ua>].png` ;
 - `report.html` : captures groupées par `hôte:port`. Un badge orange signale les services dont
@@ -301,7 +301,7 @@ Limite : seul l'en-tête `User-Agent` change. La page reste chargée par Edge/Ch
 ses autres en-têtes et exécute le JavaScript. Un vrai `curl` peut obtenir une réponse différente.
 Le cache HTTP est désactivé pour que chaque UA reçoive une réponse fraîche.
 
-## Compiler
+## 🛠️ Compiler
 
 Prérequis : Go (`winget install GoLang.Go`).
 
