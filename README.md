@@ -6,6 +6,8 @@ passives (logs Certificate Transparency, DNS passif, archives web). Les IP trouv
 avec des sources gratuites (ports et CVE connus, fuites, priorisation KEV / EPSS).
 Un seul exécutable portable, sans installation.
 
+![NetShot (Go) : onglet Scan après une capture de example.com et example.org](docs/netshot-go.png)
+
 ## Organisation du dossier
 
 ```
