@@ -7,49 +7,29 @@ import (
 	"testing"
 )
 
-func TestEnsureKeysFile(t *testing.T) {
-	dir := t.TempDir()
-	portable := filepath.Join(dir, "app", "keys.json")
-	user := filepath.Join(dir, "appdata", "netshot", "keys.json")
-	os.MkdirAll(filepath.Dir(portable), 0o700)
-	oldP, oldU := portableKeysPath, userKeysPath
-	portableKeysPath = func() string { return portable }
-	userKeysPath = func() string { return user }
-	defer func() { portableKeysPath, userKeysPath = oldP, oldU }()
+func TestKeysFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "keys.json")
+	old := keysPath
+	keysPath = func() string { return path }
+	defer func() { keysPath = old }()
 
-	// 1. no file anywhere: template created with every source empty
+	// 1. missing: empty template created with every source
 	ensureKeysFile()
 	var k Keys
-	data, err := os.ReadFile(portable)
+	data, err := os.ReadFile(path)
 	if err != nil || json.Unmarshal(data, &k) != nil || len(k) != len(keySources) {
 		t.Fatalf("template not created: %v %s", err, data)
 	}
 
-	// 2. existing portable file kept as is
-	os.WriteFile(portable, []byte(`{"shodan":"SECRET"}`), 0o600)
-	if loadKeys().get("shodan") != "SECRET" {
-		t.Fatal("portable key lost")
-	}
-	if data, _ := os.ReadFile(portable); string(data) != `{"shodan":"SECRET"}` {
-		t.Fatalf("portable file changed: %s", data)
+	// 2. existing file never overwritten
+	os.WriteFile(path, []byte(`{"shodan":"SECRET"}`), 0o600)
+	ensureKeysFile()
+	if data, _ := os.ReadFile(path); string(data) != `{"shodan":"SECRET"}` {
+		t.Fatalf("existing file changed: %s", data)
 	}
 
-	// 3. only the former user file: copied next to the exe, original left in place
-	os.Remove(portable)
-	os.MkdirAll(filepath.Dir(user), 0o700)
-	os.WriteFile(user, []byte(`{"leakix":"U"}`), 0o600)
-	if loadKeys().get("leakix") != "U" {
-		t.Fatal("user key lost")
-	}
-	if data, _ := os.ReadFile(portable); string(data) != `{"leakix":"U"}` {
-		t.Fatalf("user file not copied next to the exe: %s", data)
-	}
-	if data, _ := os.ReadFile(user); string(data) != `{"leakix":"U"}` {
-		t.Fatalf("user file changed: %s", data)
-	}
-
-	// 4. saving merges into the file on disk, next to the exe, never in the former user file
-	os.WriteFile(portable, []byte(`{"leakix":"U","virustotal":"EDITED_BY_HAND"}`), 0o600)
+	// 3. saving merges into the file on disk (hand edits kept) and keeps a backup
+	os.WriteFile(path, []byte(`{"leakix":"U","virustotal":"EDITED_BY_HAND"}`), 0o600)
 	if err := updateKeys(Keys{"shodan": "NEW"}); err != nil {
 		t.Fatal(err)
 	}
@@ -57,25 +37,22 @@ func TestEnsureKeysFile(t *testing.T) {
 	if k.get("shodan") != "NEW" || k.get("virustotal") != "EDITED_BY_HAND" || k.get("leakix") != "U" {
 		t.Fatalf("keys lost by save: %v", k)
 	}
-	if data, _ := os.ReadFile(filepath.Join(filepath.Dir(portable), "keys.json.bak")); string(data) != `{"leakix":"U","virustotal":"EDITED_BY_HAND"}` {
+	if data, _ := os.ReadFile(filepath.Join(filepath.Dir(path), "keys.json.bak")); string(data) != `{"leakix":"U","virustotal":"EDITED_BY_HAND"}` {
 		t.Fatalf("no backup: %s", data)
 	}
-	if data, _ := os.ReadFile(user); string(data) != `{"leakix":"U"}` {
-		t.Fatalf("user file changed by save: %s", data)
-	}
 
-	// 5. removal ("-" in the GUI) only drops that key
+	// 4. removal ("-" in the GUI) only drops that key
 	updateKeys(Keys{"leakix": ""})
 	if k = loadKeys(); k.get("leakix") != "" || k.get("virustotal") != "EDITED_BY_HAND" {
 		t.Fatalf("removal wrong: %v", k)
 	}
 
-	// 6. invalid JSON (hand edit typo): never rewritten
-	os.WriteFile(portable, []byte(`{"shodan":"X",`), 0o600)
+	// 5. invalid JSON (hand edit typo): never rewritten
+	os.WriteFile(path, []byte(`{"shodan":"X",`), 0o600)
 	if updateKeys(Keys{"urlscan": "Y"}) == nil {
 		t.Fatal("invalid file accepted")
 	}
-	if data, _ := os.ReadFile(portable); string(data) != `{"shodan":"X",` {
+	if data, _ := os.ReadFile(path); string(data) != `{"shodan":"X",` {
 		t.Fatalf("invalid file rewritten: %s", data)
 	}
 }

@@ -54,40 +54,48 @@ Double-clic sur `dist\netshot.exe` (ou lancement sans argument).
 L'interface s'ouvre dans une fenêtre Edge/Chrome. Elle est servie en local sur `127.0.0.1`,
 sur un port aléatoire et une adresse contenant un jeton aléatoire : elle n'est pas joignable depuis le réseau.
 
-L'interface est organisée en onglets, avec le journal et l'aperçu de la dernière capture
-toujours visibles en bas. Les zones de texte et les tableaux ont des boutons **Copier**
-(presse-papiers) et **Reset** (vider) :
+La fenêtre s'ouvre maximisée.
 
-Les onglets suivent le déroulé d'un inventaire : trouver les noms, les scanner, puis analyser.
+#### Onglets
 
-- **🌐 Domaine** (ouvert au démarrage) : domaines, sources passives, filtres DNS, liste des
-  sous-domaines trouvés (ajoutés aux cibles du Scan). Les sources qui demandent une clé sont grisées
-  tant que la clé n'est pas saisie ;
-- **📸 Scan** : cibles (saisie, `AS1234`, fichier `.txt` ou export `.csv`, nombre affiché dans l'onglet),
-  ports, dossier de sortie, parallélisme, timeouts, user agents, case « Enrichir les IP » ;
-- **🧭 DNS** : enregistrements d'un domaine comme `dig` (voir plus bas), constats, bouton
-  « Ajouter les hôtes aux cibles » et copie au format dig ;
-- **🪪 Whois** : propriétaire d'un domaine, d'une IP ou d'un AS (voir plus bas), constats, texte
-  WHOIS brut. Cet onglet occupe toute la hauteur : journal et aperçu y sont masqués ;
-- **🔒 Certificats** : analyse TLS des services https (voir plus bas). Bouton « Services https du
-  dernier scan », tableau trié du pire au meilleur, détail au clic, CSV dans le dossier de sortie.
-  La case « Analyser les certificats TLS » de l'onglet Scan la lance aussi après chaque scan ;
-- **Clés API** : clés des services gratuits, avec le lien pour en obtenir une ;
-- délai minimum entre deux captures (limite de débit) ;
-- résolution des captures : 1366x768, 1920x1080 (défaut), 2560x1440, 4K ou mobile ;
-- user agents : navigateurs, bots, tous, aucun, ou UA personnalisé ;
-- journal, barre de progression, aperçu de la dernière capture (clic = ouvrir l'image) ;
-- thème choisi dans l'en-tête, gardé pour la prochaine ouverture (`settings.json`, à côté de `keys.json`) : Auto (suit Windows), Clair,
-  Sombre, Terminal / SOC (bleu nuit, accent cyan, tableaux en police fixe), Orange (anthracite et
-  orange), Nord (gris bleutés doux). En thème clair, le journal est clair aussi ;
-- boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport, Quitter.
+Dans l'ordre du déroulé d'une reconnaissance :
 
-Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie
-(par défaut `screenshots\` à côté de l'exe).
+| Onglet | Rôle |
+|---|---|
+| **🌐 Domaine** | Ouvert au démarrage. Recherche de sous-domaines dans les sources passives, avec filtres DNS ; les sources à clé restent grisées tant que la clé manque. Les noms trouvés sont ajoutés aux cibles du Scan. |
+| **📸 Scan** | Cibles, options, user agents, lancement des captures. Le nombre de cibles s'affiche dans l'onglet. |
+| **🧭 DNS** | Enregistrements d'un domaine (comme dig), constats, ajout des hôtes aux cibles, copie au format dig. |
+| **🪪 Whois** | Propriétaire d'un domaine, d'une IP ou d'un AS : tableau à gauche, texte WHOIS brut à droite, constats. L'onglet occupe toute la hauteur de la fenêtre. |
+| **🔒 Certificats** | Analyse TLS des services https (bouton « Services https du dernier scan »), tableau trié du pire au meilleur, détail au clic, CSV dans le dossier de sortie. |
+| **🔓 Leaks** | Fuites de données (LeakCheck, clé requise) : mots de passe masqués par défaut, tri, export CSV. |
+| **🔑 Clés API** | Saisie des clés des services gratuits, avec le lien pour en obtenir une. Seuls les champs remplis sont enregistrés, `-` supprime une clé. |
 
-La fenêtre de l'interface s'ouvre maximisée. Fermer la fenêtre de l'interface arrête le programme au bout de 10 secondes (un scan en cours
-est arrêté proprement et son rapport écrit). Recharger la page ne l'arrête pas.
-La fenêtre console affichée à côté sert de journal technique ; la fermer arrête aussi le programme.
+#### Onglet Scan
+
+- **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier `.txt` ou d'un export `.csv`.
+- **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
+  résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
+- **Cases** : « Enrichir les IP » (Shodan, LeakIX, KEV, EPSS), « Analyser les certificats TLS »,
+  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image).
+- **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
+- **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
+- **Dernière capture** : aperçu affiché à côté du journal ; clic pour ouvrir l'image.
+
+Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `screenshots\` à côté de l'exe).
+
+#### Partout
+
+- **Journal** en bas de chaque onglet, sauf Whois.
+- Boutons **Copier** et **Reset** sur les zones de texte, les tableaux et le journal.
+- **Thème** choisi dans l'en-tête, gardé dans `settings.json` (à côté de `keys.json`) : Auto (suit Windows),
+  Clair, Sombre, Terminal / SOC (bleu nuit, accent cyan, tableaux en police fixe), Orange (anthracite et
+  orange), Nord (gris bleutés doux).
+
+#### Fermeture
+
+- Fermer la fenêtre arrête le programme au bout de 10 secondes ; un scan en cours est arrêté proprement
+  et son rapport écrit. Recharger la page ne l'arrête pas.
+- La fenêtre console affichée à côté sert de journal technique ; la fermer arrête aussi le programme.
 
 ## Ligne de commande
 
@@ -231,10 +239,10 @@ taille des paramètres DH.
 
 ## Clés API
 
-Comptes gratuits. Les clés sont dans **`keys.json`, à côté de l'exe**. S'il manque au lancement, il
-est créé : copie de l'ancien `%APPDATA%\netshot\keys.json` s'il existe (laissé en place), sinon modèle
-vide. Un `keys.json` existant n'est jamais écrasé. Le fichier contient les clés en clair : ne pas
-partager un dossier qui le contient (il est exclu de git).
+Comptes gratuits. Les clés sont dans **`keys.json`, à côté de l'exe**. S'il manque au lancement, un
+modèle vide est créé ; un `keys.json` existant n'est jamais écrasé. À l'enregistrement, seuls les
+champs remplis sont modifiés et l'ancien fichier est gardé en `keys.json.bak`. Le fichier contient les
+clés en clair : ne pas partager un dossier qui le contient (il est exclu de git).
 Saisie : bloc « Clés API » de l'interface, ou `-key source=CLÉ -save-keys`.
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 

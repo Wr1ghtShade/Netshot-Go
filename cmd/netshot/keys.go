@@ -31,53 +31,30 @@ var keySources = []struct {
 	{"leakcheck", "LeakCheck", "https://leakcheck.io/"},
 }
 
-// keysPath is keys.json next to the exe (the user's config folder only if the exe path is unknown).
-func keysPath() string {
-	if portable := portableKeysPath(); portable != "" {
-		return portable
-	}
-	return userKeysPath()
-}
-
-// portableKeysPath is keys.json next to the exe ("" if the exe path is unknown). A variable for tests.
-var portableKeysPath = func() string {
+// keysPath is keys.json next to the exe (in the current folder if the exe path is unknown).
+// A variable for tests.
+var keysPath = func() string {
 	exe, err := os.Executable()
 	if err != nil {
-		return ""
+		return "keys.json"
 	}
 	return filepath.Join(filepath.Dir(exe), "keys.json")
 }
 
-// userKeysPath is the former location, keys.json in the user's config folder. A variable for tests.
-var userKeysPath = func() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		dir = "."
-	}
-	return filepath.Join(dir, "netshot", "keys.json")
-}
-
-// ensureKeysFile creates keys.json next to the exe when it is missing: a copy of the former user file
-// (%APPDATA%\netshot\keys.json, left in place) when there is a valid one, else an empty template.
+// ensureKeysFile creates an empty keys.json template next to the exe when it is missing.
 // Exclusive creation (O_EXCL): an existing keys.json is never overwritten. Errors (read-only folder,
 // file created meanwhile) are ignored: the program then runs without file.
 func ensureKeysFile() {
-	portable := portableKeysPath()
-	if portable == "" {
+	path := keysPath()
+	if _, err := os.Stat(path); err == nil {
 		return
 	}
-	if _, err := os.Stat(portable); err == nil {
-		return
+	template := Keys{}
+	for _, s := range keySources {
+		template[s.Name] = ""
 	}
-	data, err := os.ReadFile(userKeysPath())
-	if err != nil || json.Unmarshal(data, &Keys{}) != nil {
-		template := Keys{}
-		for _, s := range keySources {
-			template[s.Name] = ""
-		}
-		data, _ = json.MarshalIndent(template, "", "  ")
-	}
-	f, err := os.OpenFile(portable, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	data, _ := json.MarshalIndent(template, "", "  ")
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return
 	}
