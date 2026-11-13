@@ -15,7 +15,7 @@ import (
 )
 
 func writeResultsJSON(outdir string, results []Result, exps []*Exposure, tlsResults []TLSResult, inv []*TechEntry,
-	groups [][]int, takeovers []Takeover) error {
+	groups [][]int, takeovers []Takeover, reps []*Reputation) error {
 	var similar [][]string
 	for _, g := range groups {
 		var urls []string
@@ -33,6 +33,7 @@ func writeResultsJSON(outdir string, results []Result, exps []*Exposure, tlsResu
 		"tls":             tlsResults,
 		"similar_pages":   similar,
 		"takeovers":       takeovers,
+		"reputation":      reps,
 	}
 	b, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
@@ -189,7 +190,7 @@ func writeXLSX(path string, sheets []sheet) error {
 	return z.Close()
 }
 
-func buildSheets(results []Result, exps []*Exposure, inv []*TechEntry, takeovers []Takeover) []sheet {
+func buildSheets(results []Result, exps []*Exposure, inv []*TechEntry, takeovers []Takeover, reps []*Reputation) []sheet {
 	var sheets []sheet
 	svc := sheet{name: "Services", header: []string{"Hôte", "Port", "UA", "URL", "Code HTTP", "Titre", "URL finale", "Repères",
 		"Technologies", "Favicon (hash)", "Groupe visuel", "Constats en-têtes", "Capture", "Erreur"}}
@@ -238,6 +239,31 @@ func buildSheets(results []Result, exps []*Exposure, inv []*TechEntry, takeovers
 		}
 	}
 	sheets = append(sheets, hdr)
+	pc := sheet{name: "WAF, SRI, traqueurs", header: []string{"URL", "WAF / CDN (passif)", "Test WAF actif", "Contenu mixte",
+		"Sans SRI", "Traqueurs", "Hôtes tiers"}}
+	seenPC := map[string]bool{}
+	for _, r := range results {
+		if r.File == "" || seenPC[r.URL] {
+			continue
+		}
+		seenPC[r.URL] = true
+		if len(r.WAF)+len(r.MixedContent)+len(r.NoSRI)+len(r.Trackers)+len(r.ThirdParty) == 0 && r.WAFProbe == "" {
+			continue
+		}
+		pc.rows = append(pc.rows, []any{r.URL, strings.Join(r.WAF, ", "), r.WAFProbe, strings.Join(r.MixedContent, "\n"),
+			strings.Join(r.NoSRI, "\n"), strings.Join(r.Trackers, "\n"), strings.Join(r.ThirdParty, " ")})
+	}
+	if len(pc.rows) > 0 {
+		sheets = append(sheets, pc)
+	}
+	if len(reps) > 0 {
+		rp := sheet{name: "Réputation", header: []string{"Niveau", "Nom", "Bloqué par", "URLhaus", "VirusTotal", "Safe Browsing", "Erreurs"}}
+		for _, r := range reps {
+			rp.rows = append(rp.rows, []any{r.Level, r.Host, strings.Join(r.Blocked, ", "), r.URLhaus, r.VirusTotal,
+				strings.Join(r.SafeBrowsing, ", "), strings.Join(r.Errors, "; ")})
+		}
+		sheets = append(sheets, rp)
+	}
 	files := sheet{name: "Fichiers exposés", header: []string{"Gravité", "URL", "Octets lus"}}
 	for _, r := range results {
 		for _, f := range r.FilesFound {

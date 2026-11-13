@@ -161,6 +161,11 @@ func cookieList(hs []Header) []cookieInfo {
 }
 
 func detectTech(hs []Header, page, title string) []Tech {
+	return detectWith(techRules, hs, page, title)
+}
+
+// detectWith applies a list of rules (technologies, WAF) to a page.
+func detectWith(rules []techRule, hs []Header, page, title string) []Tech {
 	hm := headerMap(hs)
 	var cookies, scripts, gens []string
 	for _, c := range cookieList(hs) {
@@ -173,7 +178,7 @@ func detectTech(hs []Header, page, title string) []Tech {
 		gens = append(gens, m[1]+m[2])
 	}
 	var found []Tech
-	for _, r := range techRules {
+	for _, r := range rules {
 		hit, version := false, ""
 		for _, p := range r.pats {
 			var texts []string

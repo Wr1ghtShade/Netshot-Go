@@ -65,6 +65,56 @@ var extraQueries = []struct{ Prefix, Type string }{
 	{"_xmpp-server._tcp", "SRV"}, {"_caldavs._tcp", "SRV"},
 }
 
+// dkimSelectors are common DKIM selectors (Google, Microsoft 365, Mailchimp, SendGrid, Mailjet, Brevo,
+// Proton, Zoho, Fastmail, Mailgun…). The real selector of a domain can be any word: none found here
+// does not prove there is no DKIM.
+var dkimSelectors = []string{"google", "selector1", "selector2", "default", "dkim", "mail", "k1", "k2", "k3", "s1", "s2",
+	"mandrill", "mxvault", "smtp", "mx", "everlytickey1", "everlytickey2", "zoho", "zmail", "protonmail", "protonmail2",
+	"protonmail3", "key1", "sig1", "mailjet", "brevo1", "brevo2", "fm1", "fm2", "fm3", "krs", "cm"}
+
+func init() {
+	for _, s := range dkimSelectors {
+		extraQueries = append(extraQueries, struct{ Prefix, Type string }{s + "._domainkey", "TXT"})
+	}
+}
+
+// dkimFound returns the selectors that publish a DKIM key, and those whose key is revoked (empty p=).
+func dkimFound(domain string, recs []DNSRecord) (found, revoked []string) {
+	suffix := "._domainkey." + domain
+	// a CNAME selector1._domainkey.domain -> …onmicrosoft.com: the TXT record carries the target name
+	alias := map[string]string{}
+	for _, r := range recs {
+		if name := strings.ToLower(r.Name); r.Type == "CNAME" && strings.HasSuffix(name, suffix) {
+			alias[strings.TrimSuffix(strings.ToLower(r.Data), ".")] = strings.TrimSuffix(name, suffix)
+		}
+	}
+	for _, r := range recs {
+		if r.Type != "TXT" {
+			continue
+		}
+		name, sel := strings.ToLower(r.Name), ""
+		if strings.HasSuffix(name, suffix) {
+			sel = strings.TrimSuffix(name, suffix)
+		} else if s, ok := alias[name]; ok {
+			sel = s
+		}
+		data := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(r.Data, `"`, ""), " ", ""))
+		if sel == "" || !(strings.Contains(data, "v=dkim1") || strings.Contains(data, "p=")) {
+			continue
+		}
+		if strings.Contains(data, "p=;") || strings.HasSuffix(data, "p=") {
+			if !containsStr(revoked, sel) {
+				revoked = append(revoked, sel)
+			}
+		} else if !containsStr(found, sel) {
+			found = append(found, sel)
+		}
+	}
+	sort.Strings(found)
+	sort.Strings(revoked)
+	return found, revoked
+}
+
 // dnsLookup runs every query against server ("" = system resolvers).
 func dnsLookup(ctx context.Context, domain, server string) DNSReport {
 	domain = normalizeDomain(domain)
@@ -232,6 +282,16 @@ func dnsFindings(domain string, recs []DNSRecord) []string {
 		default:
 			f = append(f, "⚠ DMARC p="+p+" : surveillance seulement, aucun blocage")
 		}
+	}
+	dkim, revoked := dkimFound(domain, recs)
+	switch {
+	case len(dkim) > 0:
+		f = append(f, "✓ DKIM publié (sélecteur(s) : "+strings.Join(dkim, ", ")+")")
+	case mx || len(spf) > 0:
+		f = append(f, fmt.Sprintf("DKIM non trouvé parmi %d sélecteurs courants (le sélecteur réel peut être un autre)", len(dkimSelectors)))
+	}
+	if len(revoked) > 0 {
+		f = append(f, "Clé DKIM révoquée (p= vide) : "+strings.Join(revoked, ", "))
 	}
 	if caa {
 		f = append(f, "✓ CAA présent : autorités de certification limitées")

@@ -70,12 +70,13 @@ func main() {
 	fs.Var(&keyFlags, "key", "API key as source=KEY, e.g. domscan=abc (repeatable)")
 	saveKeysFlag := fs.Bool("save-keys", false, "store the -key values in "+keysPath())
 	noLabel := fs.Bool("no-label", false, "do not write host:port, URL, status and date at the bottom of the screenshots")
-	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS) nor look up the CVEs of the versions found (NVD)")
+	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the CVEs of the versions found (NVD) nor check the reputation of the host names (block lists, URLhaus, VirusTotal, Safe Browsing)")
 	noAnalyze := fs.Bool("no-analyze", false, "do not analyse the pages (technologies, sensitive pages, headers, favicon, similar pages, JS, robots, banners, takeover)")
 	dirsFlag := fs.Bool("dirs", false, "test the common folders of dirs.txt on every web service and capture the directory listings found ('Index of'); extra requests")
 	dirsWordlist := fs.String("dirs-wordlist", "", "folder list for -dirs, one path per line (implies -dirs)")
 	filesFlag := fs.Bool("files", false, "test the sensitive files of files.txt (.env, .git/HEAD, backups, phpinfo, actuator...) on every web service; each answer is checked against a signature")
 	filesWordlist := fs.String("files-wordlist", "", "file list for -files: path<TAB>severity<TAB>regex per line (implies -files)")
+	wafProbe := fs.Bool("waf-probe", false, "send one request with a harmless attack-like string (XSS / SQL / ../) per web service to see whether a WAF blocks it; active test")
 	var excludeFlags, excludeFiles multiFlag
 	fs.Var(&excludeFlags, "exclude", "out-of-scope targets never scanned: IP, CIDR, host name or *.domain, comma separated (repeatable)")
 	fs.Var(&excludeFiles, "exclude-file", "file of out-of-scope targets, one per line (repeatable)")
@@ -170,6 +171,7 @@ func main() {
 			fmt.Printf("  %-15s %-32s %s%s\n", s.Name, state, s.Help, def)
 		}
 		fmt.Println("\nEnrichment of the IPs found: Shodan host API (with key, else the free InternetDB), LeakIX (key), CISA KEV, FIRST EPSS.")
+		fmt.Println("Reputation of the public host names: filtering DNS resolvers (Quad9, Cloudflare, OpenDNS, AdGuard), URLhaus (key abusech), VirusTotal (key), Google Safe Browsing (key safebrowsing).")
 		fmt.Println("Targets: AS<number> expands to the prefixes announced by the AS (RIPEstat).")
 		fmt.Println("Keys file:", keysPath())
 		return
@@ -251,6 +253,7 @@ func main() {
 		TLS:            *tlsScan,
 		Keys:           keys,
 		Analyze:        !*noAnalyze,
+		WAFProbe:       *wafProbe,
 	}
 	if *dirsFlag || *dirsWordlist != "" {
 		var custom []string

@@ -252,13 +252,14 @@ table.leaks td { white-space: nowrap; }
               <option value="3840x2160">3840 x 2160 (4K)</option>
               <option value="390x844">390 x 844 (mobile)</option>
             </select>
-            <label title="IP publiques uniquement : organisation, services, versions et CVE (Shodan avec clé, sinon Shodan InternetDB gratuit), fuites (LeakIX, avec clé), priorisation CISA KEV et EPSS. Les IP internes ne sont jamais envoyées."><input type="checkbox" id="enrich" checked> Enrichir les IP et les versions (Shodan, LeakIX, NVD, KEV, EPSS)</label>
+            <label title="IP publiques uniquement : organisation, services, versions et CVE (Shodan avec clé, sinon Shodan InternetDB gratuit), fuites (LeakIX, avec clé), priorisation CISA KEV et EPSS. Les IP internes ne sont jamais envoyées."><input type="checkbox" id="enrich" checked> Enrichir les IP, les versions et la réputation (Shodan, LeakIX, NVD, KEV, EPSS, listes de blocage)</label>
             <label title="Après le scan, analyse le certificat et la configuration TLS de chaque service https trouvé (résultats dans l'onglet Certificats et le rapport)"><input type="checkbox" id="tls-scan" checked> Analyser les certificats TLS</label>
             <label title="Écrit hôte:port, URL, code HTTP et date en bas de chaque capture"><input type="checkbox" id="label-shots" checked> Inscrire l'URL sur les captures</label>
           </div>
           <div class="row">
             <label title="Teste ~95 dossiers courants (backup/, uploads/, logs/, .git/…) sur chaque service web et capture les listes de fichiers trouvées. Requêtes en plus."><input type="checkbox" id="probe-dirs"> Tester les dossiers courants (Index of)</label>
             <label title="Teste ~65 fichiers sensibles (.env, .git/HEAD, sauvegardes, phpinfo, actuator…). Chaque réponse doit contenir la signature du fichier. Requêtes en plus."><input type="checkbox" id="probe-files"> Tester les fichiers sensibles (.env, .git…)</label>
+            <label title="Une requête par service web avec une chaîne d'attaque inoffensive (XSS, SQL, ../) dans l'URL, comparée à la page normale : un code 403/406… ou une page de blocage révèle un WAF. Test actif, à réserver au périmètre autorisé."><input type="checkbox" id="waf-probe"> Tester la présence d'un WAF (requête de test)</label>
           </div>
           <div class="row">
             <label for="proxy" title="http://127.0.0.1:8080 (Burp, ZAP) ou socks5://hôte:1080. Pages, favicons, dossiers et fichiers passent par le proxy ; le test des ports passe par un proxy SOCKS5, et reste direct avec un proxy HTTP.">Proxy</label><input type="text" id="proxy" style="width:220px" placeholder="http://127.0.0.1:8080">
@@ -925,6 +926,7 @@ async function start(confirmed) {
     label: $("label-shots").checked,
     dirs: $("probe-dirs").checked,
     files: $("probe-files").checked,
+    waf_probe: $("waf-probe").checked,
     proxy: $("proxy").value,
     exclude: $("exclude").value,
     confirm: !!confirmed,

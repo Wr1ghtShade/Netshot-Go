@@ -64,7 +64,7 @@ func sortResults(results []Result) {
 }
 
 func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResult, outdir string,
-	inv []*TechEntry, visualGroups [][]int, takeovers []Takeover) error {
+	inv []*TechEntry, visualGroups [][]int, takeovers []Takeover, reps []*Reputation) error {
 	sortResults(results) // already sorted when groups were computed: indexes stay valid
 	firsts := map[int]bool{}
 	for _, g := range visualGroups {
@@ -81,11 +81,13 @@ func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResul
 	}
 	w := csv.NewWriter(f)
 	w.Write([]string{"host", "port", "ua", "url", "status", "title", "final_url", "size", "file", "error",
-		"tags", "tech", "favicon_hash", "header_issues", "visual_group"})
+		"tags", "tech", "favicon_hash", "header_issues", "visual_group", "waf", "waf_probe", "mixed_content", "no_sri", "trackers", "third_party_hosts"})
 	for _, r := range results {
 		w.Write([]string{r.Host, strconv.Itoa(r.Port), r.UA, r.URL, itoaOrEmpty(r.Status), r.Title,
 			r.FinalURL, itoaOrEmpty(r.Size), r.File, r.Error, strings.Join(r.Tags, " "),
-			strings.Join(techLabels(r.Tech), "; "), r.FaviconHash, strings.Join(r.HeaderIssues, "; "), itoaOrEmpty(r.Group)})
+			strings.Join(techLabels(r.Tech), "; "), r.FaviconHash, strings.Join(r.HeaderIssues, "; "), itoaOrEmpty(r.Group),
+			strings.Join(r.WAF, "; "), r.WAFProbe, strings.Join(r.MixedContent, " "), strings.Join(r.NoSRI, " "),
+			strings.Join(r.Trackers, "; "), strings.Join(r.ThirdParty, " ")})
 	}
 	w.Flush()
 	f.Close()
@@ -234,9 +236,9 @@ if(c)c.onchange=function(){document.body.classList.toggle('only',c.checked)};
 	page = strings.Replace(page, "{{TLSCSS}}", tlsCSS, 1)
 	page = strings.Replace(page, "{{TLS}}", tlsSection(tlsResults), 1)
 	page = strings.Replace(page, "{{WEBCSS}}", webCSS+filterCSS+reconCSS, 1)
-	page = strings.Replace(page, "{{TOP}}", takeoverSection(takeovers)+filesSection(results)+sensitiveSection(results)+
+	page = strings.Replace(page, "{{TOP}}", reputationSection(reps)+takeoverSection(takeovers)+filesSection(results)+sensitiveSection(results)+
 		jsSection(results)+techSection(inv)+bannersSection(results)+wellKnownSection(results), 1)
-	page = strings.Replace(page, "{{BOTTOM}}", headersSection(results)+groupsSection(results, visualGroups)+filterBar(results), 1)
+	page = strings.Replace(page, "{{BOTTOM}}", headersSection(results)+pageChecksSection(results)+groupsSection(results, visualGroups)+filterBar(results), 1)
 	page = strings.Replace(page, "{{FILTERJS}}", filterJS, 1)
 	return os.WriteFile(filepath.Join(outdir, "report.html"), []byte(page), 0o644)
 }

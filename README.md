@@ -29,6 +29,8 @@ netshot-go/
 │   ├── tlsreport.go          sorties de l'analyse TLS (texte, CSV, rapport)
 │   ├── whois.go              whois d'un domaine, d'une IP ou d'un AS (RDAP + port 43)
 │   ├── leakcheck.go          fuites de données (LeakCheck Pro API v2), onglet Leaks
+│   ├── pagecheck.go          contenu mixte, SRI, traqueurs, WAF (passif et -waf-probe)
+│   ├── reputation.go         réputation des noms : résolveurs filtrants, URLhaus, VirusTotal, Safe Browsing
 │   ├── settings.go           réglages de l'interface (thème) dans settings.json
 │   ├── window_*.go           ouverture maximisée de la fenêtre (Windows)
 │   ├── wordlist.go, subdomains.txt   dictionnaire de la force brute DNS
@@ -81,10 +83,11 @@ Dans l'ordre du déroulé d'une reconnaissance :
 - **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
   résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
 - **Ports** : liste libre ou menu **Préréglages…** (par défaut, web étendu, services non web, les deux).
-- **Cases** : « Enrichir les IP et les versions » (Shodan, LeakIX, NVD, KEV, EPSS), « Analyser les certificats TLS »,
+- **Cases** : « Enrichir les IP, les versions et la réputation » (Shodan, LeakIX, NVD, KEV, EPSS, listes de
+  blocage), « Analyser les certificats TLS »,
   « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image),
-  « Tester les dossiers courants (Index of) » et « Tester les fichiers sensibles (.env, .git…) »
-  (désactivées par défaut).
+  « Tester les dossiers courants (Index of) », « Tester les fichiers sensibles (.env, .git…) » et
+  « Tester la présence d'un WAF (requête de test) » (désactivées par défaut).
 - **Proxy** et **Hors périmètre** : voir « Périmètre et proxy ».
 - **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
 - **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
@@ -145,10 +148,11 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 | `-key SOURCE=CLÉ` | clé API d'un service (répétable) | fichier de clés |
 | `-save-keys` | enregistre les `-key` dans le fichier de clés | - |
 | `-list-sources` | liste les sources et les clés configurées | - |
-| `-no-enrich` | désactive l'enrichissement des IP et la recherche des CVE dans NVD | enrichissement actif |
+| `-no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `-no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires, JS, robots, bannières, takeover) | analyse active |
 | `-files` | teste les fichiers sensibles de `files.txt` (signature vérifiée) | non |
 | `-files-wordlist FILE` | liste de fichiers à la place de `files.txt` (active `-files`) | - |
+| `-waf-probe` | une requête de test par service web (chaîne XSS / SQL / `../` inoffensive) pour voir si un WAF bloque | non |
 | `-dirs` | teste les dossiers de `dirs.txt` et capture les listes de fichiers trouvées | non |
 | `-dirs-wordlist FILE` | liste de dossiers à la place de `dirs.txt` (active `-dirs`) | - |
 | `-exclude CIBLES` | cibles hors périmètre : IP, CIDR, nom ou `*.domaine`, séparées par des virgules (répétable) | - |
@@ -213,7 +217,10 @@ réseau interne), ou un serveur précis avec `-dns-server`. UDP avec EDNS0, puis
 est tronquée ou vide (certains résolveurs comme 1.1.1.1 abandonnent les gros TXT en UDP).
 
 Constats affichés : SPF (absent, multiple, `+all`, `~all`, `-all`), DMARC (absent, `p=none`,
-`quarantine`, `reject`), CAA, DNSSEC (DS publié), MTA-STS, enregistrements Active Directory visibles.
+`quarantine`, `reject`), DKIM (32 sélecteurs courants testés : Google, Microsoft 365, Mailchimp,
+SendGrid, Mailjet, Brevo, Proton, Zoho, Fastmail… ; clé révoquée signalée), CAA, DNSSEC (DS publié),
+MTA-STS, enregistrements Active Directory visibles. Le sélecteur DKIM réel peut être un autre mot :
+« DKIM non trouvé » ne prouve pas son absence.
 
 ## 🪪 Whois d'un domaine, d'une IP ou d'un AS
 
@@ -265,7 +272,7 @@ Saisie : bloc « Clés API » de l'interface, ou `-key source=CLÉ -save-keys`.
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 
 Services acceptant une clé : certspotter, hackertarget, urlscan, virustotal, dnsdumpster, domscan,
-viewdns, leakix.
+viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus), safebrowsing (Google Safe Browsing).
 
 Non inclus : SecurityTrails (plus de formule gratuite). ViewDNS passe uniquement par son API officielle
 (la page web est protégée par un contrôle anti-robot Cloudflare).
@@ -304,6 +311,23 @@ Après le scan, chaque IP derrière les services trouvés est enrichie :
 Seules les IP **publiques** sont envoyées à Shodan et LeakIX ; les IP internes ne quittent jamais le poste.
 Désactivable avec `-no-enrich` ou la case de l'interface.
 
+### 🚦 Réputation des noms (listes de blocage, malware, phishing)
+
+Avec l'enrichissement, chaque nom d'hôte **public** scanné est vérifié (un nom qui pointe vers une IP
+interne n'est jamais envoyé) :
+
+| Source | Clé | Ce qui est relevé |
+|---|---|---|
+| **Résolveurs DNS filtrants** | aucune | Quad9 (malware, phishing), Cloudflare 1.1.1.2 (malware), OpenDNS (phishing), AdGuard DNS (publicité, traqueurs) : un nom qui résout normalement (1.1.1.1) mais que ces résolveurs bloquent (NXDOMAIN, `0.0.0.0`, page de blocage) est signalé. Le port 53 sortant doit être ouvert ; sinon le journal l'indique |
+| **URLhaus** (abuse.ch) | `abusech`, gratuite | URL malveillantes connues sur le nom (et combien sont encore en ligne), présence dans Spamhaus DBL et SURBL |
+| **VirusTotal** | `virustotal` (déjà utilisée pour les sous-domaines) | nombre de moteurs qui classent le domaine malveillant ou suspect. API gratuite : 4 requêtes / minute, donc limité aux 8 premiers noms |
+| **Google Safe Browsing** | `safebrowsing`, gratuite | malware, hameçonnage, logiciel indésirable, sur les URL capturées |
+
+Niveau : **critique** (Safe Browsing, URL URLhaus en ligne, au moins 3 moteurs VirusTotal), **haute**
+(bloqué par un résolveur de sécurité, connu d'URLhaus, 1 ou 2 moteurs), **moyenne** (seulement
+suspect pour VirusTotal), **info** (bloqué seulement par AdGuard, donc publicité ou traqueur).
+Section « Réputation » en tête du rapport, `reputation.csv`, onglet « Réputation » de `results.xlsx`.
+
 ## 🔬 Analyse des pages
 
 Pendant la capture, NetShot lit ce que chaque page révèle, sans scan supplémentaire (seule requête en
@@ -316,6 +340,9 @@ plus : le favicon). Désactivable avec `-no-analyze`.
 | **Favicon** | hash MurmurHash3 identique au filtre Shodan `http.favicon.hash`, avec un lien de recherche Shodan |
 | **Pages similaires** | hash perceptuel de chaque capture : les pages identiques sont regroupées et une case du rapport masque les doublons (jamais une page sensible) |
 | **En-têtes de sécurité** | HSTS, CSP, anti-clickjacking, `nosniff`, `Referrer-Policy` absents, version divulguée, cookies sans `Secure` / `HttpOnly` / `SameSite`, mot de passe saisi en HTTP clair |
+| **Contenu mixte et SRI** | ressources (scripts, styles, images, iframes…) et formulaires en `http://` sur une page HTTPS ; scripts et feuilles de style d'un autre site chargés sans attribut `integrity` (SRI). Lus dans la page déjà chargée, sans requête de plus |
+| **Traqueurs et tiers** | ~80 services connus : mesure d'audience (Google Analytics, Matomo Cloud, AT Internet…), publicité, pixels des réseaux sociaux, analyse comportementale (Hotjar, Clarity…), bannières de consentement, Google Fonts, chat, monitoring ; plus la liste des hôtes tiers appelés par la page. Utile pour un contrôle RGPD |
+| **WAF / CDN de protection** | Cloudflare, Akamai, Imperva, Sucuri, F5 ASM, AWS WAF / CloudFront, Azure Front Door / Application Gateway, FortiWeb, Barracuda, NetScaler AppFirewall, ModSecurity, Fastly, DDoS-Guard… lus dans les en-têtes et les cookies. Avec `-waf-probe` (désactivé par défaut, test **actif**) : une requête avec une chaîne d'attaque inoffensive dans l'URL, comparée à la page normale ; un code 403 / 406… ou une page de blocage confirme le filtrage et nomme souvent le produit |
 
 Les versions lues dans les en-têtes sont indicatives : un serveur peut masquer ou mentir sur sa
 version, et une distribution peut corriger une faille sans changer le numéro (rétroportage).
@@ -365,13 +392,16 @@ peu de trafic Microsoft de fond par le proxy : il apparaît dans Burp.
   la réponse change selon l'UA (code HTTP, titre, redirection, échec, taille de page qui varie
   de plus de 20 %). Une case à cocher n'affiche que ces services. Une barre de filtres reste en
   haut de l'écran : recherche (URL, titre, techno, tag), code HTTP, repère et technologie. En tête :
-  prises de contrôle possibles, fichiers exposés, pages sensibles, JavaScript, technologies,
-  services non web, robots / sitemap, en-têtes de sécurité, pages similaires ;
+  réputation des noms, prises de contrôle possibles, fichiers exposés, pages sensibles, JavaScript, technologies,
+  services non web, robots / sitemap, en-têtes de sécurité, WAF, contenu mixte et SRI, traqueurs,
+  pages similaires ;
 - `results.csv` : host, port, ua, url, status, title, final_url, size, file, error, tags, tech,
-  favicon_hash, header_issues, visual_group ;
+  favicon_hash, header_issues, visual_group, waf, waf_probe, mixed_content, no_sri, trackers,
+  third_party_hosts ;
 - `technologies.csv` : technologies et versions trouvées, URL concernées, CVE, KEV, EPSS et CVSS max ;
 - `results.xlsx` : un onglet par thème (Services, Pages sensibles, Technologies, En-têtes, Fichiers
-  exposés, JavaScript, Takeover, Services non web, robots et sitemap, Exposition), avec filtres et
+  exposés, JavaScript, Takeover, Services non web, robots et sitemap, Exposition, WAF / SRI / traqueurs,
+  Réputation), avec filtres et
   en-tête figé, prêt pour un suivi des écarts ;
 - `results.json` : tout le scan pour un autre outil ;
 - avec l'enrichissement : un tableau « Exposition » en tête du rapport (IP les plus critiques

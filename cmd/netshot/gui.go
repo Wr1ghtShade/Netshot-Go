@@ -58,6 +58,7 @@ type startRequest struct {
 	Label          bool     `json:"label"`
 	Dirs           bool     `json:"dirs"`
 	Files          bool     `json:"files"`
+	WAFProbe       bool     `json:"waf_probe"`
 	Proxy          string   `json:"proxy"`
 	Exclude        string   `json:"exclude"`
 	Confirm        bool     `json:"confirm"`
@@ -368,6 +369,7 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		TLS:            req.TLS,
 		Keys:           loadKeys(),
 		Analyze:        true,
+		WAFProbe:       req.WAFProbe,
 	}
 	if req.Dirs {
 		opt.Dirs = dirWords(nil)

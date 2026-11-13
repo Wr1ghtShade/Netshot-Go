@@ -40,6 +40,7 @@ type Options struct {
 	Analyze        bool        // technologies, sensitive pages, headers, favicon, JS, robots, banners, takeover
 	Dirs           []string    // -dirs: folders to test for directory listings (nil = off)
 	Files          []FileRule  // -files: sensitive files to test (nil = off)
+	WAFProbe       bool        // -waf-probe: one request with a harmless attack-like string per web service
 	Proxy          *Proxy      // pages, favicons, folders and files go through it
 	Exclusions     *Exclusions // out-of-scope targets, never scanned
 }
@@ -71,9 +72,15 @@ type Result struct {
 	Banner         string      `json:"banner,omitempty"`
 	Service        string      `json:"service,omitempty"`
 	ServiceVersion string      `json:"service_version,omitempty"`
-	Dir            bool        `json:"dir,omitempty"` // capture of a folder found by -dirs
-	PageText       string      `json:"-"`             // for the takeover fingerprints
-	Dup            bool        `json:"-"`             // visual duplicate (report only)
+	Dir            bool        `json:"dir,omitempty"`               // capture of a folder found by -dirs
+	WAF            []string    `json:"waf,omitempty"`               // WAF / protective CDN seen in headers and cookies
+	WAFProbe       string      `json:"waf_probe,omitempty"`         // verdict of -waf-probe
+	MixedContent   []string    `json:"mixed_content,omitempty"`     // http:// resources on an https page
+	NoSRI          []string    `json:"no_sri,omitempty"`            // third-party scripts / styles without integrity
+	Trackers       []string    `json:"trackers,omitempty"`          // known trackers and third-party services
+	ThirdParty     []string    `json:"third_party_hosts,omitempty"` // third-party hosts loaded by the page
+	PageText       string      `json:"-"`                           // for the takeover fingerprints
+	Dup            bool        `json:"-"`                           // visual duplicate (report only)
 }
 
 // Callbacks are optional hooks used by the GUI and the CLI.
@@ -301,6 +308,13 @@ func capture(stopCtx, browserCtx context.Context, opt Options, ws *webState, ua 
 		info.Tech = detectTech(hs, content, title)
 		info.Tags = pageTags(title, content, final, status, hs, info.Tech)
 		info.HeaderIssues = headerIssues(final, hs, content)
+		info.WAF = detectWAF(hs)
+		var resJSON string
+		if chromedp.Run(ctx, chromedp.Evaluate(pageResourcesJS, &resJSON)) == nil {
+			pc := analyzeResources(final, resJSON)
+			info.MixedContent, info.NoSRI, info.Trackers, info.ThirdParty = pc.MixedContent, pc.NoSRI, pc.Trackers, pc.ThirdParty
+			info.HeaderIssues = append(info.HeaderIssues, pageIssues(pc)...)
+		}
 		var iconURL string
 		if chromedp.Run(ctx, chromedp.Evaluate(faviconJS, &iconURL)) == nil {
 			info.FaviconURL = iconURL
@@ -379,7 +393,7 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 		logf("[proxy] pages, favicons et dossiers via %s ; %s. Analyse TLS, enrichissement et NVD restent en direct.", opt.Proxy.Server(), how)
 	}
 	var ws *webState
-	if opt.Analyze || opt.Dirs != nil || opt.Files != nil {
+	if opt.Analyze || opt.Dirs != nil || opt.Files != nil || opt.WAFProbe {
 		ws = newWebState(opt.Proxy, opt.PageTimeout)
 	}
 	if err := os.MkdirAll(opt.Output, 0o755); err != nil {
@@ -467,6 +481,13 @@ feed:
 			logf("[enrich] %v", err)
 		}
 	}
+	var reps []*Reputation
+	if opt.Enrich && ctx.Err() == nil && len(results) > 0 {
+		reps = checkReputation(ctx, results, exposures, opt.Keys, logf)
+		if err := writeReputationCSV(reps, opt.Output); err != nil {
+			logf("[réputation] %v", err)
+		}
+	}
 	var tlsResults []TLSResult
 	if opt.TLS && ctx.Err() == nil {
 		if targets := tlsTargetsFromResults(results); len(targets) > 0 {
@@ -524,13 +545,13 @@ feed:
 			logf("[web] %v", err)
 		}
 	}
-	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers); err != nil {
+	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers, reps); err != nil {
 		return results, err
 	}
-	if err := writeResultsJSON(opt.Output, results, exposures, tlsResults, inv, groups, takeovers); err != nil {
+	if err := writeResultsJSON(opt.Output, results, exposures, tlsResults, inv, groups, takeovers, reps); err != nil {
 		logf("[export] results.json : %v", err)
 	}
-	if err := writeXLSX(filepath.Join(opt.Output, "results.xlsx"), buildSheets(results, exposures, inv, takeovers)); err != nil {
+	if err := writeXLSX(filepath.Join(opt.Output, "results.xlsx"), buildSheets(results, exposures, inv, takeovers, reps)); err != nil {
 		logf("[export] results.xlsx : %v", err)
 	}
 	ok := 0
@@ -612,6 +633,9 @@ func scanService(ctx, browserCtx context.Context, opt Options, ws *webState, lim
 			if len(r.Tech) > 0 {
 				extra += "  " + strings.Join(techLabels(r.Tech[:min(4, len(r.Tech))]), ", ")
 			}
+			if len(r.WAF) > 0 {
+				extra += "  WAF " + strings.Join(r.WAF, ", ")
+			}
 			logf("[+] %s  %d  %s%s%s", url, r.Status, truncate(r.Title, 60), tag, extra)
 			if cb.Shot != nil {
 				cb.Shot(r)
@@ -641,6 +665,14 @@ func scanService(ctx, browserCtx context.Context, opt Options, ws *webState, lim
 		rows[first].WellKnown = ws.wellKnown(ctx, baseURL, baseUA)
 		if w := rows[first].WellKnown; w != nil && len(w.Robots) > 0 {
 			logf("[robots] %srobots.txt : %d chemin(s)", baseURL, len(w.Robots))
+		}
+	}
+	if first >= 0 && opt.WAFProbe && ctx.Err() == nil {
+		if limiter.wait(ctx) == nil {
+			rows[first].WAFProbe = ws.probeWAF(ctx, baseURL, baseUA)
+			if v := rows[first].WAFProbe; v != "" {
+				logf("[waf] %s  %s", baseURL, v)
+			}
 		}
 	}
 	if first >= 0 && opt.Files != nil && ctx.Err() == nil {
