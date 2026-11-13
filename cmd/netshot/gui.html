@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NetShot</title>
+<title>NetShot {{VERSION}}</title>
 <link rel="icon" type="image/png" href="icon.png">
 <style>
 /* Themes: every colour of the page comes from these variables. No data-theme = Auto (Windows setting). */
@@ -193,7 +193,7 @@ table.leaks td { white-space: nowrap; }
 <body>
 <main>
   <nav class="tabs">
-    <span class="brand"><img src="icon.png" alt="">NetShot</span>
+    <span class="brand"><img src="icon.png" alt="">NetShot <small style="font-weight:400;font-size:12px;opacity:.6">v{{VERSION}}</small></span>
     <!-- Order follows the workflow: find the names, scan them, then look at DNS and certificates -->
     <button class="tab-btn active" data-tab="subs"><span class="ico">🌐</span>Domaine</button>
     <button class="tab-btn" data-tab="scan"><span class="ico">📸</span>Scan <span class="count" id="targets-count"></span></button>

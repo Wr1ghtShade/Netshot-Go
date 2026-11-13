@@ -139,6 +139,7 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 | `-d` | secondes minimum entre deux captures | `0` (pas de limite) |
 | `-u` | user agent : nom, `browsers`, `bots`, `all` ou chaîne libre (répétable) | UA du navigateur |
 | `-list-ua` | liste les UA intégrés | - |
+| `-version` | affiche la version de NetShot | - |
 | `-ct DOMAINE` | ajoute aux cibles les sous-domaines trouvés par les sources passives (répétable) | - |
 | `-ct-sources` | `default`, `all`, ou une liste (voir `-list-sources`) | `default` |
 | `-key SOURCE=CLÉ` | clé API d'un service (répétable) | fichier de clés |

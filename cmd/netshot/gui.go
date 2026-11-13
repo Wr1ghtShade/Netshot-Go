@@ -154,7 +154,7 @@ func writeJSON(w http.ResponseWriter, v any) {
 func (s *guiServer) handleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// The saved theme is written into the page, so it is drawn with it from the first frame
-	page := guiHTML
+	page := strings.ReplaceAll(guiHTML, "{{VERSION}}", version)
 	if t := savedTheme(); t != "auto" {
 		page = strings.Replace(page, `<html lang="fr">`, `<html lang="fr" data-theme="`+t+`">`, 1)
 	}

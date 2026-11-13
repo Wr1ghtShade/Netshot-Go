@@ -53,6 +53,7 @@ func main() {
 	pageTimeout := fs.Float64("page-timeout", 15, "page load timeout in seconds")
 	delay := fs.Float64("d", 0, "minimum seconds between two page loads, e.g. 2 (0 = no limit)")
 	fs.Var(&uas, "u", "user agent: name from -list-ua, browsers, bots, all, or a literal string (repeatable)")
+	showVersion := fs.Bool("version", false, "print the version and exit")
 	listUA := fs.Bool("list-ua", false, "list the built-in user agents and exit")
 	width := fs.Int("width", 1920, "viewport width")
 	height := fs.Int("height", 1080, "viewport height")
@@ -106,6 +107,10 @@ func main() {
 		args = fs.Args()[1:]
 	}
 
+	if *showVersion {
+		fmt.Println("NetShot " + version)
+		return
+	}
 	if *listUA {
 		for _, g := range []struct {
 			name string

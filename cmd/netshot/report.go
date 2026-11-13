@@ -215,7 +215,7 @@ h1.brand img{width:36px;height:36px}
 {{TLSCSS}}
 {{WEBCSS}}
 </style></head><body>
-<h1 class="brand"><img src="{{LOGO}}" alt="">NetShot</h1><p>%d services, %d captures - %s</p>
+<h1 class="brand"><img src="{{LOGO}}" alt="">NetShot</h1><p>v{{VERSION}} - %d services, %d captures - %s</p>
 {{TOP}}
 %s
 {{TLS}}
@@ -229,6 +229,7 @@ if(c)c.onchange=function(){document.body.classList.toggle('only',c.checked)};
 </script></body></html>`, len(order), len(results), time.Now().Format("2006-01-02 15:04"),
 		exposureTable(exposures), filter, sb.String())
 	// The logo is embedded so the report stays a single self-contained file
+	page = strings.ReplaceAll(page, "{{VERSION}}", version)
 	page = strings.ReplaceAll(page, "{{LOGO}}", "data:image/png;base64,"+base64.StdEncoding.EncodeToString(iconPNG))
 	page = strings.Replace(page, "{{TLSCSS}}", tlsCSS, 1)
 	page = strings.Replace(page, "{{TLS}}", tlsSection(tlsResults), 1)

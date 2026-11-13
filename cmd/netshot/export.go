@@ -25,13 +25,14 @@ func writeResultsJSON(outdir string, results []Result, exps []*Exposure, tlsResu
 		similar = append(similar, urls)
 	}
 	data := map[string]any{
-		"generated":     time.Now().Format(time.RFC3339),
-		"services":      results,
-		"technologies":  inv,
-		"exposure":      exps,
-		"tls":           tlsResults,
-		"similar_pages": similar,
-		"takeovers":     takeovers,
+		"netshot_version": version,
+		"generated":       time.Now().Format(time.RFC3339),
+		"services":        results,
+		"technologies":    inv,
+		"exposure":        exps,
+		"tls":             tlsResults,
+		"similar_pages":   similar,
+		"takeovers":       takeovers,
 	}
 	b, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
