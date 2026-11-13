@@ -3,6 +3,32 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Python a son
 propre journal dans le dépôt [Netshot](https://github.com/Wr1ghtShade/Netshot).
 
+## [1.2.3] - 2026-11-13
+
+Nouveau logo « radar », choisi parmi les six pistes proposées.
+
+### Modifié
+- Logo : carré arrondi en dégradé bleu → cyan, trois cercles de radar, secteur de balayage cyan,
+  ligne de balayage et trois points blancs (les services trouvés). Il remplace la fenêtre de
+  navigateur et les repères de capture.
+- Petites tailles : sous 48 px, traits et points plus épais et cercle intérieur supprimé, pour
+  rester lisible dans la barre des tâches et en favicon.
+- `tools/mkicon` dessine le radar (toujours sans dépendance) et prend une option
+  `-variant python -out <dossier>` qui produit `icon.png` (256 px) et `icon-32.png` (32 px) aux
+  couleurs de la version Python (indigo, balayage ambre).
+- Fichiers régénérés : `cmd/netshot/icon.png` (favicon de l'interface et logo du rapport),
+  `cmd/netshot/rsrc_windows_amd64.syso` (icône de l'exe), `assets/icon.ico` (16 à 256 px).
+- Capture du README mise à jour.
+
+### Fichiers
+- `tools/mkicon/main.go`, `cmd/netshot/icon.png`, `cmd/netshot/rsrc_windows_amd64.syso`,
+  `assets/icon.ico`, `cmd/netshot/version.go`, `README.md`, `docs/netshot-go.png`.
+
+### Tests
+- `go vet` ; icônes générées et vérifiées de 16 à 256 px sur fond clair et sombre ; interface
+  ouverte dans Chrome headless.
+- Non vérifié : l'icône de l'exe dans l'Explorateur Windows (compilation Windows non faite ici).
+
 ## [1.2.2] - 2026-11-13
 
 Refonte de l'interface, étape 2 : les autres onglets prennent le style de l'onglet Scan (même

@@ -6,7 +6,7 @@ passives (logs Certificate Transparency, DNS passif, archives web). Les IP trouv
 avec des sources gratuites (ports et CVE connus, fuites, priorisation KEV / EPSS).
 Un seul exécutable portable, sans installation.
 
-![NetShot (Go) : onglet Scan (version 1.2.2)](docs/netshot-go.png)
+![NetShot (Go) : onglet Scan (version 1.2.3)](docs/netshot-go.png)
 
 ## 📁 Organisation du dossier
 
@@ -43,7 +43,7 @@ netshot-go/
 │   ├── targets.go, ua.go     analyse des cibles et des ports, liste des user agents
 │   ├── icon.png              favicon de l'interface (généré)
 │   └── rsrc_windows_amd64.syso   icône de l'exe (généré)
-├── tools/mkicon/             générateur de l'icône
+├── tools/mkicon/             générateur du logo radar (exe Go, et PNG de la version Python avec -variant python)
 ├── assets/icon.ico           icône multi-tailles (référence)
 └── dist/                     exécutables compilés + dossier screenshots\ par défaut (non versionné)
 ```

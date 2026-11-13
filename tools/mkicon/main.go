@@ -8,19 +8,37 @@
 //   - cmd/netshot/rsrc_windows_amd64.syso   COFF resource object picked up by `go build`
 //   - assets/icon.ico                       multi-size icon (16 to 256 px), for reference
 //
-// Design: blue rounded square, white browser window with a small network inside,
-// amber screenshot crop marks around it.
+// The Python version (Netshot repository) uses the same drawing in its own colours:
+//
+//	go run ./tools/mkicon -variant python -out ../netshot/assets
+//
+// writes icon.png (256 px) and icon-32.png (32 px, the header of the tkinter window) there.
+//
+// Design ("radar"): rounded square with a diagonal gradient, three radar rings, a sweep sector in
+// the accent colour, the sweep line and three white dots, the services found. Go: blue to cyan,
+// cyan sweep. Python: navy to indigo, amber sweep. Below 48 px the strokes and dots get thicker
+// and the inner ring goes, so the icon stays readable in the taskbar and as a favicon.
 package main
 
 import (
 	"bytes"
 	"encoding/binary"
+	"flag"
 	"image"
 	"image/color"
 	"image/png"
 	"math"
 	"os"
+	"path/filepath"
 )
+
+// palette of one variant: gradient from c1 (top left) to c2 (bottom right), accent of the sweep.
+type palette struct{ c1, c2, accent string }
+
+var palettes = map[string]palette{
+	"go":     {"#1d4ed8", "#0891b2", "#67e8f9"},
+	"python": {"#1e3a8a", "#4f46e5", "#fbbf24"},
+}
 
 type rgba struct{ r, g, b, a float64 }
 
@@ -94,48 +112,62 @@ func hex(s string) rgba {
 	return rgba{v[0], v[1], v[2], 1}
 }
 
-// render draws the icon at the given pixel size.
-func render(size int) *image.NRGBA {
+func (cv *canvas) ring(cx, cy, r, w float64, c rgba) {
+	cv.fill(func(x, y float64) bool { return math.Abs(math.Hypot(x-cx, y-cy)-r) <= w/2 }, solid(c))
+}
+
+// render draws the icon at the given pixel size. Coordinates are the 512-unit design divided by 512.
+func render(size int, pal palette) *image.NRGBA {
 	ss := 4
 	if size <= 48 {
 		ss = 8 // more supersampling keeps small sizes crisp
 	}
 	cv := &canvas{n: size * ss, pix: make([]rgba, size*ss*size*ss)}
-	top, bottom := hex("#3b82f6"), hex("#1e3a8a")
-	white, amber, blue, bar := hex("#ffffff"), hex("#fbbf24"), hex("#2563eb"), hex("#dbeafe")
+	c1, c2, accent := hex(pal.c1), hex(pal.c2), hex(pal.accent)
+	white := hex("#ffffff")
+	u := func(v float64) float64 { return v / 512 }
+	// Thicker strokes and dots at small sizes
+	k := 1.0
+	switch {
+	case size <= 24:
+		k = 1.6
+	case size <= 48:
+		k = 1.3
+	}
 
-	// Background: rounded square with vertical gradient
-	cv.fill(func(x, y float64) bool { return inRoundRect(x, y, 0.02, 0.02, 0.98, 0.98, 0.22) },
+	// Background: rounded square, diagonal gradient
+	cv.fill(func(x, y float64) bool { return inRoundRect(x, y, 0.02, 0.02, 0.98, 0.98, 0.21) },
 		func(x, y float64) rgba {
-			return rgba{top.r + (bottom.r-top.r)*y, top.g + (bottom.g-top.g)*y, top.b + (bottom.b-top.b)*y, 1}
+			t := (x + y) / 2
+			return rgba{c1.r + (c2.r-c1.r)*t, c1.g + (c2.g-c1.g)*t, c1.b + (c2.b-c1.b)*t, 1}
 		})
 
-	// Browser window with title bar and three dots
-	wx0, wy0, wx1, wy1 := 0.22, 0.27, 0.78, 0.73
-	inWin := func(x, y float64) bool { return inRoundRect(x, y, wx0, wy0, wx1, wy1, 0.05) }
-	cv.fill(inWin, solid(white))
-	cv.fill(func(x, y float64) bool { return inWin(x, y) && y < wy0+0.085 }, solid(bar))
-	for i, c := range []string{"#ef4444", "#f59e0b", "#22c55e"} {
-		cv.circle(wx0+0.05+float64(i)*0.045, wy0+0.043, 0.016, hex(c))
+	cx, cy, R := 0.5, 0.5, u(150)
+	// Radar rings (the inner one is dropped below 48 px)
+	for _, rg := range []struct{ r, a float64 }{{150, .35}, {100, .5}, {50, .7}} {
+		if rg.r == 50 && size < 48 {
+			continue
+		}
+		w := white
+		w.a = rg.a
+		cv.ring(cx, cy, u(rg.r), u(14)*k, w)
 	}
-
-	// Network inside the window: three linked nodes
-	nodes := [][2]float64{{0.35, 0.62}, {0.50, 0.44}, {0.65, 0.62}}
-	for i := range nodes {
-		a, b := nodes[i], nodes[(i+1)%len(nodes)]
-		cv.line(a[0], a[1], b[0], b[1], 0.022, blue)
-	}
-	for _, n := range nodes {
-		cv.circle(n[0], n[1], 0.045, blue)
-		cv.circle(n[0], n[1], 0.022, white)
-	}
-
-	// Screenshot crop marks around the window
-	m0, m1, l, w := 0.12, 0.88, 0.14, 0.045
-	for _, c := range [][4]float64{{m0, m0, 1, 1}, {m1, m0, -1, 1}, {m0, m1, 1, -1}, {m1, m1, -1, -1}} {
-		x, y, sx, sy := c[0], c[1], c[2], c[3]
-		cv.line(x, y, x+sx*l, y, w, amber)
-		cv.line(x, y, x, y+sy*l, w, amber)
+	// Sweep sector from -90° to -35°
+	a1, a2 := -math.Pi/2, -35*math.Pi/180
+	sweep := accent
+	sweep.a = 0.6
+	cv.fill(func(x, y float64) bool {
+		if math.Hypot(x-cx, y-cy) > R {
+			return false
+		}
+		a := math.Atan2(y-cy, x-cx)
+		return a >= a1 && a <= a2
+	}, solid(sweep))
+	// Sweep line, centre and the three services found
+	cv.line(cx, cy, cx+R*math.Cos(a2), cy+R*math.Sin(a2), u(14)*k, white)
+	cv.circle(cx, cy, u(18)*k, white)
+	for _, n := range [][2]float64{{338, 168}, {178, 318}, {320, 348}} {
+		cv.circle(u(n[0]), u(n[1]), u(16)*k, white)
 	}
 
 	// Downsample
@@ -336,10 +368,25 @@ func must(err error) {
 }
 
 func main() {
+	variant := flag.String("variant", "go", "go (icon of the exe, favicon) or python (PNG files for the Python version)")
+	out := flag.String("out", "", "with -variant python: folder that receives icon.png and icon-32.png")
+	flag.Parse()
+	pal, ok := palettes[*variant]
+	if !ok {
+		panic("unknown variant: " + *variant)
+	}
+	if *variant == "python" {
+		if *out == "" {
+			panic("-variant python needs -out <folder>")
+		}
+		must(os.WriteFile(filepath.Join(*out, "icon.png"), encodePNG(render(256, pal)), 0o644))
+		must(os.WriteFile(filepath.Join(*out, "icon-32.png"), encodePNG(render(32, pal)), 0o644))
+		return
+	}
 	var icons []iconImage
 	var big *image.NRGBA
 	for _, s := range []int{16, 24, 32, 48, 64, 128, 256} {
-		img := render(s)
+		img := render(s, pal)
 		if s == 256 {
 			big = img
 			icons = append(icons, iconImage{s, encodePNG(img)}) // PNG for 256 px, as Windows expects
