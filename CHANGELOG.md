@@ -3,6 +3,38 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Python a son
 propre journal dans le dépôt [Netshot](https://github.com/Wr1ghtShade/Netshot).
 
+## [1.2.2] - 2026-11-13
+
+Refonte de l'interface, étape 2 : les autres onglets prennent le style de l'onglet Scan (même
+étape que la version Python 1.2.2).
+
+### Modifié
+- Titres d'onglet (Domaine, DNS, Whois, Certificats, Leaks, Clés API) avec leur icône au trait.
+- Chaque onglet occupe toute la hauteur ; tant qu'il n'y a pas de résultat, un encadré explique ce
+  qui s'affichera (Domaine, DNS, Whois, Certificats, Leaks). Fini le grand vide sous le formulaire.
+- **Domaine** : sources en boutons à cocher ; une source dont la clé manque est en pointillés,
+  avec une icône de clé à la place de l'emoji 🔑.
+- **DNS et Whois** : constats en pastilles colorées (orange = point d'attention, vert = bon point,
+  gris = neutre) ; les signes ⚠ / ✓ sont remplacés par la couleur.
+- **Tableaux** : en-têtes en petites capitales, ligne surlignée au survol.
+- **Clés API** : une grille nom / état (« configurée » en vert, « absente ») / champ / lien
+  (« obtenir une clé » ou « compte »).
+- Les aides ne coupent plus les mots en plein milieu.
+- Statut initial de la barre d'action : « Prêt. » (le nombre d'UA est affiché à côté de la liste).
+- Capture du README mise à jour.
+
+### Corrigé
+- Onglet DNS : erreur JavaScript quand un domaine ne renvoie aucun enregistrement (liste vide
+  renvoyée en `null`).
+
+### Fichiers
+- `cmd/netshot/gui.html`, `version.go`, `README.md`, `docs/netshot-go.png`.
+
+### Tests
+- `go vet`, `go test`.
+- Chaque onglet ouvert dans Chrome headless (thème clair et sombre), requête DNS lancée depuis
+  l'interface, scan complet sur une page locale ; aucune erreur JavaScript.
+
 ## [1.2.1] - 2026-11-13
 
 Refonte de l'interface, étape 1 : en-tête et onglet Scan, d'après la maquette validée (même

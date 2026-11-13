@@ -97,7 +97,7 @@ button.stop { color: var(--danger); }
 /* Quit: discreet, red only on hover */
 button.quit { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); font-weight: 600; }
 button.quit:hover:not(:disabled) { background: var(--quit); color: #ffffff; border-color: var(--quit); }
-.hint { color: var(--muted); font-size: 12px; word-break: break-all; }
+.hint { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 /* Copier / Reset pairs */
 .head { display: flex; align-items: center; gap: 8px; }
 .head h3 { margin: 0 0 6px; }
@@ -222,10 +222,49 @@ table.dns th, table.dns td { border-bottom: 1px solid var(--border); padding: 3p
 table.dns th { font-family: "Segoe UI", system-ui, sans-serif; color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
 table.dns td.data { word-break: break-all; }
 table.dns td.type { font-weight: 600; white-space: nowrap; }
-ul.findings { margin: 6px 0 0; padding-left: 18px; }
-ul.findings li.warn { color: var(--warn); }
-ul.findings li.good { color: var(--ok); }
-.key-label { min-width: 130px; }
+/* Findings: one pill each, colour = verdict */
+ul.findings { margin: 8px 0 4px; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+ul.findings li { font-size: 12px; border-radius: 999px; padding: 3px 10px; border: 1px solid var(--border);
+                 background: var(--bg); color: var(--text); }
+ul.findings li.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+                      background: color-mix(in srgb, var(--warn) 9%, transparent); }
+ul.findings li.good { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+                      background: color-mix(in srgb, var(--ok) 9%, transparent); }
+/* Every tab: the panel fills the height; an empty state shows until the first result */
+.tab > .panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.tab > .panel > h3:first-child { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text);
+                                 text-transform: none; letter-spacing: 0; }
+.tab > .panel > h3:first-child svg.i { color: var(--accent); width: 18px; height: 18px; }
+.result:not([hidden]) + .empty { display: none; }
+.empty { flex: 1 1 0; min-height: 140px; margin-top: 12px; display: flex; flex-direction: column; align-items: center;
+         justify-content: center; gap: 6px; text-align: center; color: var(--muted); border: 1px dashed var(--border);
+         border-radius: 10px; padding: 16px; }
+.empty svg.i { width: 28px; height: 28px; opacity: .7; }
+.empty b { color: var(--text); font-weight: 600; }
+.empty span { font-size: 13px; max-width: 520px; }
+/* Domaine: sources as chips; a source that needs a missing key is dashed */
+#ct-sources { gap: 6px; }
+#ct-sources label { display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; cursor: pointer; border-radius: 999px;
+                    border: 1px solid var(--border); background: var(--panel); font-size: 13px; color: var(--muted); }
+#ct-sources label:hover { border-color: var(--accent); }
+#ct-sources label:has(input:checked) { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+                                       background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }
+#ct-sources label.off { border-style: dashed; opacity: .75; cursor: help; }
+#ct-sources input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+#ct-sources label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+#ct-sources svg.i, .hint svg.i { width: 13px; height: 13px; vertical-align: -2px; }
+/* Tables */
+table.dns tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+table.dns th { text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+/* API keys: name, status, field, link */
+#keys-list { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr) max-content; gap: 5px 12px;
+             align-items: center; margin: 8px 0; }
+#keys-list .key-name { font-weight: 600; }
+#keys-list .key-state { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 9px; color: var(--muted);
+                        border: 1px solid var(--border); }
+#keys-list .key-state.on { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+                           background: color-mix(in srgb, var(--ok) 9%, transparent); }
+#keys-list input { width: 100%; }
 /* Certificates tab */
 table.tls td { font-family: "Segoe UI", system-ui, sans-serif; }
 table.tls tr.main { cursor: pointer; }
@@ -379,7 +418,7 @@ table.leaks td { white-space: nowrap; }
     <!-- Subdomains -->
     <div class="tab active" id="tab-subs">
       <section class="panel">
-        <h3>Domaine : sous-domaines depuis des sources passives (logs CT, DNS passif, archives)</h3>
+        <h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Sous-domaines depuis des sources passives (logs CT, DNS passif, archives)</h3>
         <div class="row">
           <label for="ct-domains">Domaines</label>
           <input type="text" id="ct-domains" class="grow" placeholder="exemple.fr, autre.com">
@@ -390,18 +429,19 @@ table.leaks td { white-space: nowrap; }
           <label title="Ignore les noms qui n'existent plus dans le DNS"><input type="checkbox" id="ct-resolve" checked> seulement les noms qui résolvent</label>
           <label title="Garde les noms qui pointent vers 10.x, 172.16-31.x, 192.168.x…"><input type="checkbox" id="ct-private"> seulement IP privées</label>
         </div>
-        <p class="hint">Les sources marquées 🔑 demandent une clé gratuite (onglet Clés API). Les noms trouvés sont ajoutés aux cibles de l'onglet Scan.</p>
+        <p class="hint">Les sources en pointillés <svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg> demandent une clé gratuite (onglet Clés API). Les noms trouvés sont ajoutés aux cibles de l'onglet Scan.</p>
         <div class="result" id="ct-result" hidden>
           <div class="head"><h3 id="ct-title"></h3><span data-tools="subs"></span></div>
           <pre class="names" id="ct-names"></pre>
         </div>
+        <div class="empty"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><b>Aucune recherche pour l'instant</b><span>Les sous-domaines trouvés s'afficheront ici et seront ajoutés aux cibles de l'onglet Scan.</span></div>
       </section>
     </div>
 
     <!-- DNS -->
     <div class="tab" id="tab-dns">
       <section class="panel">
-        <h3>Enregistrements DNS d'un domaine (comme dig)</h3>
+        <h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></svg>Enregistrements DNS d'un domaine (comme dig)</h3>
         <div class="row">
           <label for="dns-domain">Domaine</label>
           <input type="text" id="dns-domain" class="grow" placeholder="exemple.fr">
@@ -422,13 +462,14 @@ table.leaks td { white-space: nowrap; }
           <table class="dns"><thead><tr><th>Nom</th><th>TTL</th><th>Type</th><th>Valeur</th></tr></thead><tbody id="dns-rows"></tbody></table>
           <div class="hint" id="dns-errors"></div>
         </div>
+        <div class="empty"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></svg><b>Aucun domaine interrogé</b><span>Enregistrements, constats SPF / DMARC / DKIM / CAA / DNSSEC et hôtes à ajouter aux cibles.</span></div>
       </section>
     </div>
 
     <!-- Whois -->
     <div class="tab" id="tab-whois">
       <section class="panel">
-        <h3>Whois : propriétaire d'un domaine, d'une IP ou d'un AS</h3>
+        <h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M14 10h4M14 14h4"/></svg>Propriétaire d'un domaine, d'une IP ou d'un AS (Whois)</h3>
         <div class="row">
           <label for="whois-query">Domaine, IP ou AS</label>
           <input type="text" id="whois-query" class="grow" placeholder="exemple.fr, 8.8.8.8, AS3215">
@@ -444,13 +485,14 @@ table.leaks td { white-space: nowrap; }
             <div class="whois-col"><h3>WHOIS brut (port 43)</h3><pre class="names whois-scroll" id="whois-raw"></pre></div>
           </div>
         </div>
+        <div class="empty"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M14 10h4M14 14h4"/></svg><b>Aucune recherche Whois</b><span>Registrar, titulaire, dates et contacts (RDAP), avec le texte WHOIS brut à côté.</span></div>
       </section>
     </div>
 
     <!-- Certificates / TLS -->
     <div class="tab" id="tab-certs">
       <section class="panel">
-        <h3>Certificats et configuration TLS (comme sslscan)</h3>
+        <h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Certificats et configuration TLS (comme sslscan)</h3>
         <div class="row" style="align-items:flex-start">
           <textarea id="tls-targets" style="min-height:70px;height:70px;flex:1" placeholder="Un point d'accès par ligne : hôte, hôte:port ou URL https (port 443 par défaut)&#10;intranet.local&#10;10.0.0.5:8443"></textarea>
           <div style="display:flex;flex-direction:column;gap:6px">
@@ -464,13 +506,14 @@ table.leaks td { white-space: nowrap; }
           <div class="head"><h3 id="tls-title"></h3><span data-tools="tls"></span></div>
           <table class="dns tls"><thead><tr><th>Cible</th><th>Note</th><th>Expiration</th><th>SSLv3</th><th>1.0</th><th>1.1</th><th>1.2</th><th>1.3</th><th>PQC</th><th>Clé</th><th>Émetteur</th><th>Confiance</th><th>HSTS</th><th>Alertes</th></tr></thead><tbody id="tls-rows"></tbody></table>
         </div>
+        <div class="empty"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><b>Aucune analyse TLS</b><span>Lancer l'analyse ou reprendre les services https du dernier scan.</span></div>
       </section>
     </div>
 
     <!-- Leaks (LeakCheck) -->
     <div class="tab" id="tab-leaks">
       <section class="panel">
-        <h3>Fuites de données (LeakCheck)</h3>
+        <h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/></svg>Fuites de données (LeakCheck)</h3>
         <div class="row">
           <label for="leak-query">Recherche</label>
           <input type="text" id="leak-query" class="grow" placeholder="e-mail, identifiant, téléphone, hash ou domaine">
@@ -486,13 +529,14 @@ table.leaks td { white-space: nowrap; }
           <div class="head"><h3 id="leak-title"></h3><span data-tools="leaks"></span><button id="leak-export" style="padding:2px 10px;font-size:12px">Exporter CSV</button></div>
           <div class="leak-wrap"><table class="dns leaks"><thead><tr id="leak-head"></tr></thead><tbody id="leak-rows"></tbody></table></div>
         </div>
+        <div class="empty"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/></svg><b>Aucune recherche de fuite</b><span>Clé LeakCheck requise (onglet Clés API). Seule la valeur recherchée est envoyée.</span></div>
       </section>
     </div>
 
     <!-- API keys -->
     <div class="tab" id="tab-keys">
       <section class="panel">
-        <h3>Clés API des services gratuits</h3>
+        <h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Clés API des services gratuits</h3>
         <p class="hint">Champ vide = garder la clé actuelle, « - » = l'effacer. <span id="keys-path"></span></p>
         <div id="keys-list"></div>
         <div class="row"><button id="keys-save" class="primary">Enregistrer les clés</button></div>
@@ -504,7 +548,7 @@ table.leaks td { white-space: nowrap; }
     <button id="start" class="primary"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l13 8-13 8z"/></svg>Lancer le scan</button>
     <button id="stop" class="stop" disabled><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>Arrêter</button>
     <div class="spacer"><progress id="progress" value="0" max="1"></progress>
-      <div id="status">Prêt. Aucun UA coché = UA du navigateur.</div></div>
+      <div id="status">Prêt.</div></div>
     <button id="open-folder" disabled><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/></svg>Ouvrir le dossier</button>
     <button id="open-report" disabled><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Ouvrir le rapport</button>
   </section>
@@ -649,7 +693,8 @@ function renderSources() {
     cb.value = s.name;
     cb.disabled = !usable;
     cb.checked = usable && (first ? s.default : checked.has(s.name) || (s.default && !keyStateOld[s.name] && keyState[s.name]));
-    lab.append(cb, " " + s.label + (s.slow ? " (lent)" : "") + (s.key === "required" && !usable ? " 🔑" : ""));
+    lab.append(cb, s.label + (s.slow ? " (lent)" : ""));
+    if (s.key === "required" && !usable) lab.insertAdjacentHTML("beforeend", "<svg class=\"i\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"M11 12l9-9M17 6l3 3\"/></svg>");
     if (!usable) lab.classList.add("off");
     box.appendChild(lab);
   }
@@ -662,23 +707,24 @@ function renderKeys(keys) {
   const list = $("keys-list");
   list.innerHTML = "";
   for (const k of keys) {
-    const row = document.createElement("div");
-    row.className = "row";
     const lab = document.createElement("label");
-    lab.className = "key-label";
+    lab.className = "key-name";
+    lab.htmlFor = "key-" + k.name;
     lab.textContent = k.label;
+    const state = document.createElement("span");
+    state.className = "key-state" + (k.set ? " on" : "");
+    state.textContent = k.set ? "configurée" : "absente";
     const input = document.createElement("input");
     input.type = "password";
-    input.className = "grow";
+    input.id = "key-" + k.name;
     input.dataset.name = k.name;
     input.autocomplete = "off";
     input.placeholder = k.set ? "configurée (vide = garder, - = effacer)" : "non configurée";
     const link = document.createElement("a");
     link.href = k.url;
     link.target = "_blank";
-    link.textContent = "obtenir";
-    row.append(lab, input, link);
-    list.appendChild(row);
+    link.textContent = k.set ? "compte" : "obtenir une clé";
+    list.append(lab, state, input, link);
   }
   renderSources();
 }
@@ -716,6 +762,15 @@ $("ct-run").onclick = async () => {
   }
 };
 
+// A finding as a pill: "⚠ …" = warning, "✓ …" = good; the sign itself is replaced by the colour
+function findingItem(f) {
+  const li = document.createElement("li");
+  li.className = f.startsWith("⚠") ? "warn" : f.startsWith("✓") ? "good" : "";
+  li.textContent = f.replace(/^[⚠✓]\s*/, "");
+  li.title = li.className === "warn" ? "Point d'attention" : li.className === "good" ? "Bon point" : "";
+  return li;
+}
+
 // --- DNS ----------------------------------------------------------------------------
 function cell(tr, text, cls) {
   const td = document.createElement("td");
@@ -734,19 +789,16 @@ $("dns-run").onclick = async () => {
     lastDNS = res;
     const rep = res.report;
     $("dns-result").hidden = false;
-    $("dns-title").textContent = `${rep.domain} - ${rep.records.length} enregistrements (serveur ${rep.server || "?"})`;
+    $("dns-title").textContent = `${rep.domain} - ${(rep.records || []).length} enregistrements (serveur ${rep.server || "?"})`;
     $("dns-any").textContent = rep.any_note + (rep.any && rep.any.length ? " : " + rep.any.map(r => r.type + " " + r.data).join(" | ") : "");
     const ul = $("dns-findings");
     ul.innerHTML = "";
     for (const f of rep.findings || []) {
-      const li = document.createElement("li");
-      li.textContent = f;
-      li.className = f.startsWith("⚠") ? "warn" : f.startsWith("✓") ? "good" : "";
-      ul.appendChild(li);
+      ul.appendChild(findingItem(f));
     }
     const tbody = $("dns-rows");
     tbody.innerHTML = "";
-    for (const r of rep.records) {
+    for (const r of rep.records || []) {
       const tr = document.createElement("tr");
       cell(tr, r.name);
       cell(tr, r.ttl);
@@ -755,7 +807,7 @@ $("dns-run").onclick = async () => {
       tbody.appendChild(tr);
     }
     $("dns-errors").textContent = (rep.errors || []).length ? "Erreurs : " + rep.errors.join(" · ") : "";
-    log(`[dns] ${rep.domain} : ${rep.records.length} enregistrements, ${(rep.findings || []).filter(f => f.startsWith("⚠")).length} point(s) d'attention`);
+    log(`[dns] ${rep.domain} : ${(rep.records || []).length} enregistrements, ${(rep.findings || []).filter(f => f.startsWith("⚠")).length} point(s) d'attention`);
   } finally {
     btn.disabled = false;
     btn.textContent = "Interroger";
@@ -790,8 +842,7 @@ $("whois-run").onclick = async () => {
     const ul = $("whois-findings");
     ul.innerHTML = "";
     for (const f of rep.findings) {
-      const li = el("li", f.startsWith("⚠") ? "warn" : f.startsWith("✓") ? "good" : "", f);
-      ul.append(li);
+      ul.append(findingItem(f));
     }
     for (const e of rep.errors) ul.append(el("li", "warn", "Erreur : " + e));
     const tbody = $("whois-rows");
