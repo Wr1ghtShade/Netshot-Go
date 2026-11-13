@@ -18,7 +18,9 @@ Nouveau logo « radar », choisi parmi les six pistes proposées.
   couleurs de la version Python (indigo, balayage ambre).
 - Fichiers régénérés : `cmd/netshot/icon.png` (favicon de l'interface et logo du rapport),
   `cmd/netshot/rsrc_windows_amd64.syso` (icône de l'exe), `assets/icon.ico` (16 à 256 px).
-- Capture du README mise à jour.
+- Captures du README refaites sur un intranet de démonstration (page de connexion en http et
+  https) : onglet Scan après la capture, et nouvelle capture du rapport HTML du même scan
+  (`docs/netshot-go-rapport.png`).
 
 ### Fichiers
 - `tools/mkicon/main.go`, `cmd/netshot/icon.png`, `cmd/netshot/rsrc_windows_amd64.syso`,
