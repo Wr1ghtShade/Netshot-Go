@@ -45,7 +45,7 @@
   --accent: #88c0d0; --accent-text: #2e3440; --danger: #bf616a; --warn: #d08770; --ok: #a3be8c;
   --log-bg: #242933; --log-text: #d8dee9; --quit: #bf616a; --quit-hover: #a5525b; color-scheme: dark;
 }
-#theme-select { margin-bottom: 6px; margin-right: 6px; max-width: 170px; }
+#theme-select { max-width: 190px; }
 nav.tabs .tab-btn { white-space: nowrap; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; }
@@ -57,11 +57,12 @@ main { display: grid; gap: 10px; padding: 10px 12px 12px; height: 100vh;
 /* Whois tab: the whole height, no log or capture below */
 main.no-bottom { grid-template-rows: auto minmax(0, 1fr); }
 /* Scan: taller journal and capture (original layout) */
-main.tall-bottom { grid-template-rows: auto minmax(0, 1fr) minmax(220px, 0.8fr); }
+main.tall-bottom { grid-template-rows: auto minmax(0, 1fr) auto minmax(130px, 0.3fr); }
 main.no-bottom .bottom { display: none; }
-/* Every tab but Scan: the journal alone, over the full width */
-main.log-only .bottom { grid-template-columns: 1fr; }
-main.log-only .bottom > .preview { display: none; }
+/* Journal and last capture share one panel with two tabs (capture: Scan tab only) */
+main.log-only .btab[data-b="cap"] { display: none; }
+main.show-cap .bbody #log { display: none; }
+main:not(.show-cap) .bbody .preview { display: none; }
 /* Domaine: the list of names takes all the height left and scrolls on its own */
 #tab-subs > .panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 #ct-result:not([hidden]) { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
@@ -93,8 +94,9 @@ button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
 button.stop { color: var(--danger); }
-button.quit { background: var(--quit); color: #ffffff; border-color: var(--quit); font-weight: 600; }
-button.quit:hover:not(:disabled) { background: var(--quit-hover); border-color: var(--quit-hover); }
+/* Quit: discreet, red only on hover */
+button.quit { background: transparent; color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, transparent); font-weight: 600; }
+button.quit:hover:not(:disabled) { background: var(--quit); color: #ffffff; border-color: var(--quit); }
 .hint { color: var(--muted); font-size: 12px; word-break: break-all; }
 /* Copier / Reset pairs */
 .head { display: flex; align-items: center; gap: 8px; }
@@ -103,18 +105,22 @@ button.quit:hover:not(:disabled) { background: var(--quit-hover); border-color: 
 .tools button { padding: 2px 10px; font-size: 12px; }
 .row .tools { margin-left: 0; }
 
-/* Tab bar */
-nav.tabs { display: flex; gap: 4px; align-items: flex-end; border-bottom: 1px solid var(--border); }
-nav.tabs .tab-btn { border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; background: none;
-                    padding: 8px 14px; color: var(--muted); margin-bottom: -1px; }
-nav.tabs .tab-btn.active { background: var(--panel); border-color: var(--border); color: var(--text); font-weight: 600; }
-nav.tabs .tab-btn .count { font-size: 11px; color: var(--muted); font-weight: normal; }
-nav.tabs .tab-btn .ico { margin-right: 6px; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+/* Line icons (stroke = text colour) */
+svg.i { width: 16px; height: 16px; flex: none; }
+/* Header: brand, tabs in a segmented bar, theme and quit on the right */
+nav.tabs { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+nav.tabs .tabbar { display: flex; gap: 2px; padding: 3px; flex-wrap: wrap; border-radius: 10px;
+                   background: color-mix(in srgb, var(--border) 55%, var(--bg)); }
+nav.tabs .tab-btn { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 8px; background: none;
+                    padding: 7px 12px; color: var(--muted); font-weight: 500; }
+nav.tabs .tab-btn:hover:not(.active) { color: var(--text); }
+nav.tabs .tab-btn.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+nav.tabs .tab-btn .count { font-size: 11px; color: var(--muted); font-weight: 600; }
+nav.tabs .tab-btn .count:not(:empty) { background: var(--bg); border-radius: 999px; padding: 0 7px; }
 nav.tabs .spacer { flex: 1; }
-nav.tabs .brand { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700;
-                  letter-spacing: .01em; margin: 0 14px 6px 2px; }
+nav.tabs .brand { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 700; letter-spacing: .01em; }
 nav.tabs .brand img { width: 26px; height: 26px; }
-nav.tabs .quit { margin-bottom: 6px; }
+nav.tabs .theme { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .tab-area { min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .tab { display: none; }
 /* Fill exactly the tab area. Below 410 px (small window) the Scan tab stops shrinking and
@@ -122,21 +128,89 @@ nav.tabs .quit { margin-bottom: 6px; }
 .tab.active { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
 #tab-scan.active { min-height: 520px; }
 
-/* Scan tab: the targets box and the user agent list grow with the window */
-.scan-grid { display: grid; grid-template-columns: 1fr 280px; gap: 12px; flex: 1 1 0; min-height: 0; }
-.scan-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
-/* height: 0 + flex: 1 = take the free space without imposing their content height
-   (the 15 user agents would otherwise push the tab past the window) */
-#targets { flex: 1; height: 0; min-height: 110px; }
-#ua-list { flex: 1; height: 0; min-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: var(--bg); }
-#ua-list label { display: flex; gap: 6px; align-items: center; padding: 2px 4px; cursor: pointer; border-radius: 4px; }
-#ua-list label:hover { background: var(--panel); }
-.tag { font-size: 11px; color: var(--muted); margin-left: auto; }
-.ua-buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 6px; }
-.ua-buttons button { padding: 4px 0; font-size: 12px; }
-.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
-.actions .spacer { flex: 1; min-width: 160px; }
-progress { width: 100%; height: 10px; accent-color: var(--accent); }
+/* Scan tab: targets on the left (grows with the window), options grouped on the right */
+.scan-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: 12px; flex: 1 1 0; min-height: 0; }
+.scan-main { display: flex; flex-direction: column; min-height: 0; }
+.scan-main > .panel { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; gap: 8px; }
+.scan-side { display: flex; flex-direction: column; gap: 10px; min-height: 0; overflow: auto; padding-right: 2px; }
+.scan-side > .panel { flex: none; }
+/* height: 0 + flex: 1 = take the free space without imposing their content height */
+#targets { flex: 1; height: 0; min-height: 110px; font-size: 13px; line-height: 1.55; }
+.head h3 { display: inline-flex; align-items: center; gap: 6px; }
+.pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 1px 9px; color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pill:empty { display: none; }
+.ports-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--border); }
+.ports-row > label { font-weight: 600; min-width: 46px; }
+.ports-row #ports { flex: 1 1 200px; width: auto; font-family: var(--mono); font-size: 13px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); background: var(--panel); }
+.chip.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+           background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }
+/* Option groups: one switch per line, title + one line of detail */
+.group-title { display: flex; align-items: center; gap: 8px; margin: 0 0 2px; }
+.group-title h3 { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+.g-passive h3 { color: var(--accent); }
+.g-active h3 { color: var(--warn); }
+.badge-warn { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+              color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+              background: color-mix(in srgb, var(--warn) 10%, transparent); border-radius: 999px; padding: 1px 8px; }
+.badge-warn svg.i { width: 12px; height: 12px; }
+label.opt { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 7px 0; cursor: pointer;
+            border-top: 1px solid var(--border); }
+label.opt:first-of-type { border-top: 0; }
+label.opt > span { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+label.opt b { font-weight: 500; color: var(--text); }
+label.opt small { font-size: 12px; color: var(--muted); }
+input.sw { appearance: none; -webkit-appearance: none; flex: none; width: 34px; height: 20px; margin: 0; border-radius: 999px;
+           background: var(--border); position: relative; cursor: pointer; transition: background .15s; }
+input.sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+                  background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s; }
+input.sw:checked { background: var(--accent); }
+input.sw:checked::after { left: 16px; }
+input.sw.act:checked { background: var(--warn); }
+input.sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* User agents: chips, selected = accent */
+#ua-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 2px; }
+#ua-list label { display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; cursor: pointer; border-radius: 999px;
+                 border: 1px solid var(--border); background: var(--panel); font-size: 13px; color: var(--muted); }
+#ua-list label:hover { border-color: var(--accent); }
+#ua-list label:has(input:checked) { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+                                    background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }
+#ua-list input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+#ua-list label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.tag { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ua-block { padding-top: 10px; border-top: 1px solid var(--border); }
+.ua-block .head h3 { margin: 0; }
+.ua-buttons { display: flex; gap: 12px; align-items: center; margin-left: auto; font-size: 12px; }
+.ua-buttons #ua-count { color: var(--muted); }
+.ua-buttons button { background: none; border: 0; padding: 0; color: var(--accent); font-size: 12px; font-weight: 600; }
+.ua-buttons button:hover { text-decoration: underline; }
+#custom-ua { margin-top: 8px; }
+/* Folded settings: a summary line, the fields below once opened */
+details.fold > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+                                 transform: rotate(-45deg); transition: transform .15s; margin: 0 4px 0 2px; }
+details.fold[open] > summary::before { transform: rotate(45deg); }
+details.fold > summary h3 { margin: 0; display: inline-flex; align-items: center; gap: 6px; }
+details.fold > summary { flex-wrap: wrap; row-gap: 2px; }
+details.fold > summary h3 { white-space: nowrap; }
+details.fold .sum { flex-basis: 100%; padding-left: 21px; font-size: 12px; color: var(--muted); }
+details.fold[open] .sum { display: none; }
+details.fold .grid2 { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: center; margin-top: 10px; }
+details.fold .grid2 label { color: var(--muted); }
+details.fold .grid2 .num { width: 100% !important; }
+/* Action bar of the Scan tab: always visible, between the tabs and the journal */
+#scan-actions { display: none; gap: 10px; align-items: center; flex-wrap: wrap; padding: 8px 12px; }
+main.on-scan #scan-actions { display: flex; }
+#scan-actions button { display: inline-flex; align-items: center; gap: 7px; }
+#scan-actions #start, #scan-actions #stop { padding: 8px 18px; font-size: 15px; }
+#scan-actions .spacer { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 4px; }
+progress { width: 100%; height: 6px; accent-color: var(--accent); appearance: none; -webkit-appearance: none; border: 0; border-radius: 999px;
+           background: var(--border); overflow: hidden; }
+progress::-webkit-progress-bar { background: var(--border); border-radius: 999px; }
+progress::-webkit-progress-value { background: var(--accent); border-radius: 999px; }
 #status { color: var(--muted); font-size: 13px; }
 
 /* Lists of results (subdomains, DNS) */
@@ -170,9 +244,16 @@ tr.detail td { background: var(--bg); font-size: 12px; }
 table.leaks th { cursor: pointer; white-space: nowrap; user-select: none; }
 table.leaks td { white-space: nowrap; }
 
-/* Bottom: shared log + last capture */
-.bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; min-height: 0; }
-.bottom > .panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+/* Bottom: journal / last capture */
+.bottom { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.bottom > .head { margin-bottom: 6px; }
+.btabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--bg); }
+.btab { border: 0; background: none; padding: 3px 12px; font-size: 13px; color: var(--muted); border-radius: 6px; font-weight: 500; position: relative; }
+.btab.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.btab .dot[hidden] { display: none !important; }
+.btab .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
+.bbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.bbody .preview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 #log { flex: 1; min-height: 0; background: var(--log-bg); color: var(--log-text); font: 12px/1.45 Consolas, monospace;
        overflow: auto; white-space: pre-wrap; word-break: break-all; padding: 8px; border-radius: 6px; margin: 0;
        border: 1px solid var(--border); }
@@ -184,7 +265,7 @@ table.leaks td { white-space: nowrap; }
 .err { color: var(--danger); }
 @media (max-width: 760px) {
   main { height: auto; grid-template-rows: none; }
-  .scan-grid, .bottom { grid-template-columns: 1fr; }
+  .scan-grid { grid-template-columns: 1fr; }
   #log { flex: none; height: 260px; }
   #preview-box { flex: none; height: 240px; }
 }
@@ -195,22 +276,24 @@ table.leaks td { white-space: nowrap; }
   <nav class="tabs">
     <span class="brand"><img src="icon.png" alt="">NetShot <small style="font-weight:400;font-size:12px;opacity:.6">v{{VERSION}}</small></span>
     <!-- Order follows the workflow: find the names, scan them, then look at DNS and certificates -->
-    <button class="tab-btn active" data-tab="subs"><span class="ico">🌐</span>Domaine</button>
-    <button class="tab-btn" data-tab="scan"><span class="ico">📸</span>Scan <span class="count" id="targets-count"></span></button>
-    <button class="tab-btn" data-tab="dns"><span class="ico">🧭</span>DNS</button>
-    <button class="tab-btn" data-tab="whois"><span class="ico">🪪</span>Whois</button>
-    <button class="tab-btn" data-tab="certs"><span class="ico">🔒</span>Certificats <span class="count" id="certs-count"></span></button>
-    <button class="tab-btn" data-tab="leaks"><span class="ico">🔓</span>Leaks <span class="count" id="leaks-count"></span></button>
-    <button class="tab-btn" data-tab="keys"><span class="ico">🔑</span>Clés API <span class="count" id="keys-count"></span></button>
+    <div class="tabbar" role="tablist" aria-label="Onglets">
+    <button class="tab-btn active" data-tab="subs"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>Domaine</button>
+    <button class="tab-btn" data-tab="scan"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>Scan <span class="count" id="targets-count"></span></button>
+    <button class="tab-btn" data-tab="dns"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="6" rx="1"/><rect x="4" y="14" width="16" height="6" rx="1"/><path d="M8 7h.01M8 17h.01"/></svg>DNS</button>
+    <button class="tab-btn" data-tab="whois"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M14 10h4M14 14h4"/></svg>Whois</button>
+    <button class="tab-btn" data-tab="certs"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Certificats <span class="count" id="certs-count"></span></button>
+    <button class="tab-btn" data-tab="leaks"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/></svg>Leaks <span class="count" id="leaks-count"></span></button>
+    <button class="tab-btn" data-tab="keys"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3"/></svg>Clés API <span class="count" id="keys-count"></span></button>
+    </div>
     <span class="spacer"></span>
-    <select id="theme-select" title="Thème de l'interface (gardé pour la prochaine ouverture)">
-      <option value="auto">Thème : Auto (Windows)</option>
+    <label class="theme" title="Thème de l'interface (gardé pour la prochaine ouverture)"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.4-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg><select id="theme-select" aria-label="Thème">
+      <option value="auto">Auto (Windows)</option>
       <option value="light">Clair</option>
       <option value="dark">Sombre</option>
       <option value="terminal">Terminal / SOC</option>
       <option value="orange">Orange</option>
       <option value="nord">Nord</option>
-    </select>
+    </select></label>
     <button id="quit" class="quit" title="Arrête le programme">Quitter</button>
   </nav>
 
@@ -218,72 +301,79 @@ table.leaks td { white-space: nowrap; }
     <!-- Scan -->
     <div class="tab" id="tab-scan">
       <div class="scan-grid">
-        <section class="panel">
-          <h3>Cibles</h3>
-          <textarea id="targets" placeholder="Une cible par ligne : 192.168.1.10, 10.0.0.0/24, intranet.local, AS3215 (plages de l'AS)&#10;# commentaire"></textarea>
-          <div class="row">
-            <button id="load" title="Liste texte, ou export CSV (Get-ADComputer, certutil / ADCS, CMDB…)">Charger un fichier / CSV…</button>
+        <div class="scan-main">
+          <section class="panel">
+            <div class="head"><h3>Cibles</h3><span class="pill" id="targets-pill"></span>
+              <span class="tools" style="margin-left:auto">
+                <button id="load" title="Liste texte, ou export CSV (Get-ADComputer, certutil / ADCS, CMDB…)">Charger un fichier / CSV…</button>
+                <span data-tools="targets"></span>
+              </span>
+            </div>
             <input type="file" id="file" accept=".txt,.csv,text/plain,text/csv" hidden>
-            <span data-tools="targets"></span>
-            <label for="ports">Ports</label><input type="text" id="ports" class="grow" title="Liste (80,443,8000-8010) ou préréglages : web, services, default, mélangeables (web,services,8443)">
-            <select id="ports-preset" title="Préréglages de ports">
-              <option value="">Préréglages…</option>
-              <option value="default">Par défaut (80, 443, 8000, 8080, 8443)</option>
-              <option value="web">Web étendu (~100 ports)</option>
-              <option value="services">Services non web (SSH, FTP, RDP, bases…)</option>
-              <option value="web,services">Web étendu + services</option>
-            </select>
-          </div>
-          <div class="row">
-            <label for="output">Dossier de sortie</label><input type="text" id="output" class="grow">
-          </div>
-          <div class="row">
-            <label for="concurrency">Parallèle</label><input type="number" id="concurrency" class="num" value="10" min="1" max="200">
-            <label for="ctimeout">Timeout TCP (s)</label><input type="number" id="ctimeout" class="num" value="1.5" min="0.2" step="0.5">
-            <label for="ptimeout">Timeout page (s)</label><input type="number" id="ptimeout" class="num" value="15" min="1">
-            <label for="delay">Délai entre captures (s)</label><input type="number" id="delay" class="num" value="0" min="0" step="0.5">
-          </div>
-          <div class="row">
-            <label for="resolution">Résolution</label>
-            <select id="resolution">
-              <option value="1366x768">1366 x 768</option>
-              <option value="1920x1080" selected>1920 x 1080 (Full HD)</option>
-              <option value="2560x1440">2560 x 1440</option>
-              <option value="3840x2160">3840 x 2160 (4K)</option>
-              <option value="390x844">390 x 844 (mobile)</option>
-            </select>
-            <label title="IP publiques uniquement : organisation, services, versions et CVE (Shodan avec clé, sinon Shodan InternetDB gratuit), fuites (LeakIX, avec clé), priorisation CISA KEV et EPSS. Les IP internes ne sont jamais envoyées."><input type="checkbox" id="enrich" checked> Enrichir les IP, les versions et la réputation (Shodan, LeakIX, NVD, KEV, EPSS, listes de blocage)</label>
-            <label title="Après le scan, analyse le certificat et la configuration TLS de chaque service https trouvé (résultats dans l'onglet Certificats et le rapport)"><input type="checkbox" id="tls-scan" checked> Analyser les certificats TLS</label>
-            <label title="Écrit hôte:port, URL, code HTTP et date en bas de chaque capture"><input type="checkbox" id="label-shots" checked> Inscrire l'URL sur les captures</label>
-          </div>
-          <div class="row">
-            <label title="Teste ~95 dossiers courants (backup/, uploads/, logs/, .git/…) sur chaque service web et capture les listes de fichiers trouvées. Requêtes en plus."><input type="checkbox" id="probe-dirs"> Tester les dossiers courants (Index of)</label>
-            <label title="Teste ~65 fichiers sensibles (.env, .git/HEAD, sauvegardes, phpinfo, actuator…). Chaque réponse doit contenir la signature du fichier. Requêtes en plus."><input type="checkbox" id="probe-files"> Tester les fichiers sensibles (.env, .git…)</label>
-            <label title="Une requête par service web avec une chaîne d'attaque inoffensive (XSS, SQL, ../) dans l'URL, comparée à la page normale : un code 403/406… ou une page de blocage révèle un WAF. Test actif, à réserver au périmètre autorisé."><input type="checkbox" id="waf-probe"> Tester la présence d'un WAF (requête de test)</label>
-          </div>
-          <div class="row">
-            <label for="proxy" title="http://127.0.0.1:8080 (Burp, ZAP) ou socks5://hôte:1080. Pages, favicons, dossiers et fichiers passent par le proxy ; le test des ports passe par un proxy SOCKS5, et reste direct avec un proxy HTTP.">Proxy</label><input type="text" id="proxy" style="width:220px" placeholder="http://127.0.0.1:8080">
-            <label for="exclude" title="IP, CIDR, nom ou *.domaine, séparés par des virgules. Un nom qui pointe vers une plage exclue est exclu aussi.">Hors périmètre</label><input type="text" id="exclude" class="grow" placeholder="10.0.5.0/24, prod.exemple.fr, *.partenaire.fr">
-          </div>
-        </section>
-        <section class="panel">
-          <h3>User agents</h3>
-          <div id="ua-list"></div>
-          <div class="ua-buttons">
-            <button data-sel="nav">Navig.</button><button data-sel="bot">Bots</button>
-            <button data-sel="all">Tous</button><button data-sel="none">Aucun</button>
-          </div>
-          <div class="row"><input type="text" id="custom-ua" placeholder="UA personnalisé (optionnel)"></div>
-        </section>
+            <textarea id="targets" aria-label="Cibles" placeholder="Une cible par ligne : 192.168.1.10, 10.0.0.0/24, intranet.local, AS3215 (plages de l'AS)&#10;# commentaire"></textarea>
+            <p class="hint" style="margin:0">IP, plage CIDR, nom d'hôte, AS1234 ou export CSV (AD, ADCS, CMDB). Une cible par ligne, # pour un commentaire.</p>
+            <div class="ports-row">
+              <label for="ports">Ports</label>
+              <input type="text" id="ports" title="Liste (80,443,8000-8010) ou préréglages : web, services, default, mélangeables (web,services,8443)">
+              <div class="chips" id="ports-chips" role="group" aria-label="Préréglages de ports">
+                <button class="chip" data-ports="default" title="80, 443, 8000, 8080, 8443">Défaut</button>
+                <button class="chip" data-ports="web" title="Une centaine de ports web">Web étendu (~100)</button>
+                <button class="chip" data-ports="services" title="SSH, FTP, SMTP, RDP, bases de données…">Services non web</button>
+                <button class="chip" data-ports="web,services">Web + services</button>
+              </div>
+            </div>
+            <div class="ua-block">
+              <div class="head"><h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>User agents</h3>
+                <div class="ua-buttons"><span id="ua-count"></span>
+                  <button data-sel="nav">Navigateurs</button><button data-sel="bot">Robots</button>
+                  <button data-sel="all">Tous</button><button data-sel="none">Aucun</button></div>
+              </div>
+              <div id="ua-list"></div>
+              <input type="text" id="custom-ua" placeholder="UA personnalisé (optionnel)" aria-label="UA personnalisé">
+            </div>
+          </section>
+        </div>
+        <aside class="scan-side">
+          <section class="panel g-passive">
+            <div class="group-title"><h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Analyse passive</h3></div>
+            <label class="opt" title="IP publiques uniquement : organisation, services, versions et CVE (Shodan avec clé, sinon Shodan InternetDB gratuit), fuites (LeakIX, avec clé), priorisation CISA KEV et EPSS. Les IP internes ne sont jamais envoyées."><span><b>Enrichir les IP et les versions</b><small>Shodan, LeakIX, NVD, CISA KEV, EPSS</small></span><input type="checkbox" class="sw" id="enrich" checked></label>
+            <label class="opt" title="Noms publics seulement : résolveurs DNS filtrants (Quad9, Cloudflare, OpenDNS, AdGuard), URLhaus, VirusTotal et Google Safe Browsing (avec clés)."><span><b>Réputation des noms</b><small>Listes de blocage, URLhaus, VirusTotal, Safe Browsing</small></span><input type="checkbox" class="sw" id="reputation" checked></label>
+            <label class="opt" title="Après le scan, analyse le certificat et la configuration TLS de chaque service https trouvé (résultats dans l'onglet Certificats et le rapport)"><span><b>Analyser les certificats TLS</b><small>Versions, suites, PQC, chaîne, HSTS</small></span><input type="checkbox" class="sw" id="tls-scan" checked></label>
+            <label class="opt" title="Écrit hôte:port, URL, code HTTP et date en bas de chaque capture"><span><b>Inscrire l'URL sur les captures</b><small>Bandeau hôte:port, URL, statut, date</small></span><input type="checkbox" class="sw" id="label-shots" checked></label>
+          </section>
+          <section class="panel g-active">
+            <div class="group-title"><h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>Tests actifs</h3><span class="badge-warn">requêtes en plus</span></div>
+            <label class="opt" title="Teste ~95 dossiers courants (backup/, uploads/, logs/, .git/…) sur chaque service web et capture les listes de fichiers trouvées."><span><b>Dossiers courants (Index of)</b><small>~95 requêtes par service web</small></span><input type="checkbox" class="sw act" id="probe-dirs"></label>
+            <label class="opt" title="Teste ~65 fichiers sensibles (.env, .git/HEAD, sauvegardes, phpinfo, actuator…). Chaque réponse doit contenir la signature du fichier."><span><b>Fichiers sensibles (.env, .git…)</b><small>~65 requêtes par service web</small></span><input type="checkbox" class="sw act" id="probe-files"></label>
+            <label class="opt" title="Une requête par service web avec une chaîne d'attaque inoffensive (XSS, SQL, ../) dans l'URL, comparée à la page normale : un code 403/406… ou une page de blocage révèle un WAF. À réserver au périmètre autorisé."><span><b>Présence d'un WAF</b><small>1 requête de test par service web</small></span><input type="checkbox" class="sw act" id="waf-probe"></label>
+          </section>
+          <details class="panel fold" id="adv">
+            <summary><h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Réglages avancés</h3><span class="sum" id="adv-sum"></span></summary>
+            <div class="grid2">
+              <label for="output">Dossier de sortie</label><input type="text" id="output">
+              <label for="concurrency">Parallèle</label><input type="number" id="concurrency" class="num" value="10" min="1" max="200">
+              <label for="ctimeout">Timeout TCP (s)</label><input type="number" id="ctimeout" class="num" value="1.5" min="0.2" step="0.5">
+              <label for="ptimeout">Timeout page (s)</label><input type="number" id="ptimeout" class="num" value="15" min="1">
+              <label for="delay">Délai entre captures (s)</label><input type="number" id="delay" class="num" value="0" min="0" step="0.5">
+              <label for="resolution">Résolution</label>
+              <select id="resolution">
+                <option value="1366x768">1366 x 768</option>
+                <option value="1920x1080" selected>1920 x 1080 (Full HD)</option>
+                <option value="2560x1440">2560 x 1440</option>
+                <option value="3840x2160">3840 x 2160 (4K)</option>
+                <option value="390x844">390 x 844 (mobile)</option>
+              </select>
+            </div>
+          </details>
+          <details class="panel fold" id="scope">
+            <summary><h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Périmètre et proxy</h3><span class="sum" id="scope-sum"></span></summary>
+            <div class="grid2">
+              <label for="proxy" title="http://127.0.0.1:8080 (Burp, ZAP) ou socks5://hôte:1080. Pages, favicons, dossiers et fichiers passent par le proxy ; le test des ports passe par un proxy SOCKS5, et reste direct avec un proxy HTTP.">Proxy</label><input type="text" id="proxy" placeholder="http://127.0.0.1:8080">
+              <label for="exclude" title="IP, CIDR, nom ou *.domaine, séparés par des virgules. Un nom qui pointe vers une plage exclue est exclu aussi.">Hors périmètre</label><input type="text" id="exclude" placeholder="10.0.5.0/24, prod.exemple.fr, *.partenaire.fr">
+            </div>
+          </details>
+        </aside>
       </div>
-      <section class="actions panel">
-        <button id="start" class="primary">Lancer le scan</button>
-        <button id="stop" class="stop" disabled>Arrêter</button>
-        <div class="spacer"><progress id="progress" value="0" max="1"></progress>
-          <div id="status">Prêt. Aucun UA coché = UA du navigateur.</div></div>
-        <button id="open-folder" disabled>Ouvrir le dossier</button>
-        <button id="open-report" disabled>Ouvrir le rapport</button>
-      </section>
     </div>
 
     <!-- Subdomains -->
@@ -410,14 +500,28 @@ table.leaks td { white-space: nowrap; }
     </div>
   </div>
 
-  <div class="bottom">
-    <section class="panel"><div class="head"><h3>Journal</h3><span data-tools="log"></span></div><pre id="log"></pre></section>
-    <section class="panel preview">
-      <h3>Dernière capture</h3>
-      <div id="preview-info"></div>
-      <div id="preview-box"><span>Aucune capture pour l'instant</span><img id="preview" alt="Dernière capture"></div>
-    </section>
-  </div>
+  <section class="panel" id="scan-actions" aria-label="Lancement du scan">
+    <button id="start" class="primary"><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4l13 8-13 8z"/></svg>Lancer le scan</button>
+    <button id="stop" class="stop" disabled><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>Arrêter</button>
+    <div class="spacer"><progress id="progress" value="0" max="1"></progress>
+      <div id="status">Prêt. Aucun UA coché = UA du navigateur.</div></div>
+    <button id="open-folder" disabled><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h6l2 2h10v10H3z"/></svg>Ouvrir le dossier</button>
+    <button id="open-report" disabled><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Ouvrir le rapport</button>
+  </section>
+
+  <section class="panel bottom">
+    <div class="head"><div class="btabs" role="tablist" aria-label="Journal et capture">
+      <button class="btab active" data-b="log">Journal</button>
+      <button class="btab" data-b="cap">Dernière capture<span class="dot" id="cap-dot" hidden></span></button>
+    </div><span data-tools="log"></span></div>
+    <div class="bbody">
+      <pre id="log"></pre>
+      <div class="preview">
+        <div id="preview-info"></div>
+        <div id="preview-box"><span>Aucune capture pour l'instant</span><img id="preview" alt="Dernière capture"></div>
+      </div>
+    </div>
+  </section>
 </main>
 
 <script>
@@ -453,13 +557,33 @@ function showTab(name) {
   document.querySelector("main").classList.toggle("no-bottom", name === "whois");
   document.querySelector("main").classList.toggle("tall-bottom", name === "scan");
   document.querySelector("main").classList.toggle("log-only", name !== "scan"); // capture: Scan tab only
+  document.querySelector("main").classList.toggle("on-scan", name === "scan");
+  if (name !== "scan") showBottom("log");
   try { localStorage.setItem("netshot-tab", name); } catch (e) {}
 }
 document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
+// Journal / last capture
+function showBottom(which) {
+  document.querySelector("main").classList.toggle("show-cap", which === "cap");
+  document.querySelectorAll(".btab").forEach(b => b.classList.toggle("active", b.dataset.b === which));
+  if (which === "cap") $("cap-dot").hidden = true;
+}
+document.querySelectorAll(".btab").forEach(b => b.onclick = () => showBottom(b.dataset.b));
+
 function countTargets() {
-  const n = $("targets").value.split(/\r?\n/).filter(l => l.split("#")[0].trim()).length;
-  $("targets-count").textContent = n ? `(${n})` : "";
+  const lines = $("targets").value.split(/\r?\n/).map(l => l.split("#")[0].trim()).filter(Boolean);
+  const n = lines.length;
+  $("targets-count").textContent = n ? String(n) : "";
+  // Rough count of addresses: IPv4 CIDR ranges are expanded, AS numbers are not known yet
+  let addrs = 0, as = false;
+  for (const l of lines) {
+    const m = l.match(/^\d{1,3}(\.\d{1,3}){3}\/(\d{1,2})$/);
+    if (m) addrs += 2 ** (32 - Math.min(32, parseInt(m[2], 10)));
+    else if (/^AS\d+$/i.test(l)) as = true;
+    else addrs += 1;
+  }
+  $("targets-pill").textContent = n ? `${n} entrée${n > 1 ? "s" : ""}` + (addrs > n ? ` · ~${addrs.toLocaleString("fr-FR")} adresses` : "") + (as ? " + AS" : "") : "";
 }
 $("targets").addEventListener("input", countTargets);
 
@@ -480,7 +604,9 @@ async function init() {
   const cfg = await api("api/config");
   uas = cfg.uas;
   $("ports").value = cfg.ports;
-  $("ports-preset").onchange = e => { if (e.target.value) { $("ports").value = e.target.value; e.target.value = ""; } };
+  document.querySelectorAll("#ports-chips .chip").forEach(c => c.onclick = () => { $("ports").value = c.dataset.ports; markPorts(); });
+  $("ports").addEventListener("input", markPorts);
+  markPorts();
   $("output").value = cfg.output;
   const list = $("ua-list");
   for (const u of uas) {
@@ -488,8 +614,14 @@ async function init() {
     lab.title = u.value;
     lab.innerHTML = `<input type="checkbox" value="${u.name}" data-bot="${u.bot}"><span></span><span class="tag">${u.bot ? "bot" : "nav"}</span>`;
     lab.querySelector("span").textContent = u.name;
+    lab.querySelector("input").onchange = countUAs;
     list.appendChild(lab);
   }
+  countUAs();
+  for (const id of ["output", "concurrency", "ctimeout", "ptimeout", "delay", "resolution", "proxy", "exclude"])
+    $(id).addEventListener("input", foldSummaries);
+  foldSummaries();
+  countTargets();
   sources = cfg.sources;
   for (const t of cfg.leakTypes || ["auto"]) $("leak-type").append(new Option(t, t));
   $("leak-type").value = "domain";
@@ -526,7 +658,7 @@ function renderSources() {
 function renderKeys(keys) {
   keyStateOld = keyState;
   keyState = Object.fromEntries(keys.map(k => [k.name, k.set]));
-  $("keys-count").textContent = `(${keys.filter(k => k.set).length}/${keys.length})`;
+  $("keys-count").textContent = `${keys.filter(k => k.set).length}/${keys.length}`;
   const list = $("keys-list");
   list.innerHTML = "";
   for (const k of keys) {
@@ -729,7 +861,7 @@ function renderTLS() {
     tbody.append(tr, detail);
   }
   const n = tlsRows.size;
-  $("certs-count").textContent = n ? `(${n})` : "";
+  $("certs-count").textContent = n ? String(n) : "";
   $("tls-result").hidden = n === 0;
   const bad = list.filter(r => ["F", "T", "C"].includes(r.grade)).length;
   $("tls-title").textContent = `${n} point(s) d'accès analysé(s), ${bad} à corriger (note C, T ou F)`;
@@ -837,7 +969,7 @@ function renderLeaks() {
   }
   $("leak-result").hidden = leak.cols.length === 0;
   $("leak-title").textContent = leak.title;
-  $("leaks-count").textContent = leak.rows.length ? `(${leak.rows.length})` : "";
+  $("leaks-count").textContent = leak.rows.length ? String(leak.rows.length) : "";
 }
 
 function sortLeaks() {
@@ -890,7 +1022,30 @@ document.querySelectorAll(".ua-buttons button").forEach(b => b.onclick = () => {
     const bot = cb.dataset.bot === "true";
     cb.checked = sel === "all" || (sel === "bot" && bot) || (sel === "nav" && !bot);
   });
+  countUAs();
 });
+
+function countUAs() {
+  const n = document.querySelectorAll("#ua-list input:checked").length;
+  $("ua-count").textContent = n ? `${n} sélectionné${n > 1 ? "s" : ""}` : "UA du navigateur";
+}
+
+// Highlights the preset chip that matches the ports field
+function markPorts() {
+  const v = $("ports").value.replace(/\s/g, "").toLowerCase();
+  const presets = { "default": "default", "80,443,8000,8080,8443": "default" };
+  document.querySelectorAll("#ports-chips .chip").forEach(c => c.classList.toggle("on", (presets[v] || v) === c.dataset.ports));
+}
+
+// One-line summaries of the folded settings
+function foldSummaries() {
+  const res = $("resolution").value.replace("x", "×");
+  $("adv-sum").textContent = `${$("concurrency").value} en parallèle · TCP ${$("ctimeout").value} s · page ${$("ptimeout").value} s` +
+    (parseFloat($("delay").value) > 0 ? ` · délai ${$("delay").value} s` : "") + ` · ${res}`;
+  const ex = $("exclude").value.split(/[,\s]+/).filter(Boolean).length;
+  $("scope-sum").textContent = ($("proxy").value.trim() ? "proxy " + $("proxy").value.trim() : "aucun proxy") +
+    " · " + (ex ? `${ex} exclusion${ex > 1 ? "s" : ""}` : "aucune exclusion");
+}
 
 $("load").onclick = () => $("file").click();
 $("file").onchange = async () => {
@@ -922,6 +1077,7 @@ async function start(confirmed) {
     output: $("output").value,
     resolution: $("resolution").value,
     enrich: $("enrich").checked,
+    reputation: $("reputation").checked,
     tls: $("tls-scan").checked,
     label: $("label-shots").checked,
     dirs: $("probe-dirs").checked,
@@ -973,6 +1129,7 @@ events.onmessage = ev => {
     img.style.display = "block";
     $("preview-box").querySelector("span").style.display = "none";
     $("preview-info").textContent = `${data.url}  [${data.status}]  ${data.title}  - UA : ${data.ua}`;
+    if (!document.querySelector("main").classList.contains("show-cap")) $("cap-dot").hidden = false;
   } else if (type === "tls") {
     tlsRows.set(data.target, data);
     renderTLS();

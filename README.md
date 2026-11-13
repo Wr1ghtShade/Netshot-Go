@@ -69,29 +69,32 @@ Dans l'ordre du déroulé d'une reconnaissance :
 
 | Onglet | Rôle |
 |---|---|
-| **🌐 Domaine** | Ouvert au démarrage. Recherche de sous-domaines dans les sources passives, avec filtres DNS ; les sources à clé restent grisées tant que la clé manque. Les noms trouvés sont ajoutés aux cibles du Scan. |
-| **📸 Scan** | Cibles, options, user agents, lancement des captures. Le nombre de cibles s'affiche dans l'onglet. |
-| **🧭 DNS** | Enregistrements d'un domaine (comme dig), constats, ajout des hôtes aux cibles, copie au format dig. |
-| **🪪 Whois** | Propriétaire d'un domaine, d'une IP ou d'un AS : tableau à gauche, texte WHOIS brut à droite, constats. L'onglet occupe toute la hauteur de la fenêtre. |
-| **🔒 Certificats** | Analyse TLS des services https (bouton « Services https du dernier scan »), tableau trié du pire au meilleur, détail au clic, CSV dans le dossier de sortie. |
-| **🔓 Leaks** | Fuites de données (LeakCheck, clé requise) : mots de passe masqués par défaut, tri, export CSV. |
-| **🔑 Clés API** | Saisie des clés des services gratuits, avec le lien pour en obtenir une. Seuls les champs remplis sont enregistrés, `-` supprime une clé. |
+| **Domaine** | Ouvert au démarrage. Recherche de sous-domaines dans les sources passives, avec filtres DNS ; les sources à clé restent grisées tant que la clé manque. Les noms trouvés sont ajoutés aux cibles du Scan. |
+| **Scan** | Cibles, options, user agents, lancement des captures. Le nombre de cibles s'affiche dans l'onglet. |
+| **DNS** | Enregistrements d'un domaine (comme dig), constats, ajout des hôtes aux cibles, copie au format dig. |
+| **Whois** | Propriétaire d'un domaine, d'une IP ou d'un AS : tableau à gauche, texte WHOIS brut à droite, constats. L'onglet occupe toute la hauteur de la fenêtre. |
+| **Certificats** | Analyse TLS des services https (bouton « Services https du dernier scan »), tableau trié du pire au meilleur, détail au clic, CSV dans le dossier de sortie. |
+| **Leaks** | Fuites de données (LeakCheck, clé requise) : mots de passe masqués par défaut, tri, export CSV. |
+| **Clés API** | Saisie des clés des services gratuits, avec le lien pour en obtenir une. Seuls les champs remplis sont enregistrés, `-` supprime une clé. |
 
 #### 📸 Onglet Scan
 
-- **Cibles** : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou chargement d'un fichier `.txt` ou d'un export `.csv`.
-- **Options** : ports, dossier de sortie, nombre de tests en parallèle, timeouts, délai entre deux captures,
-  résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
-- **Ports** : liste libre ou menu **Préréglages…** (par défaut, web étendu, services non web, les deux).
-- **Cases** : « Enrichir les IP, les versions et la réputation » (Shodan, LeakIX, NVD, KEV, EPSS, listes de
-  blocage), « Analyser les certificats TLS »,
-  « Inscrire l'URL sur les captures » (bandeau hôte:port, URL, statut et date en bas de chaque image),
-  « Tester les dossiers courants (Index of) », « Tester les fichiers sensibles (.env, .git…) » et
-  « Tester la présence d'un WAF (requête de test) » (désactivées par défaut).
-- **Proxy** et **Hors périmètre** : voir « Périmètre et proxy ».
-- **User agents** : sélection rapide Navig. / Bots / Tous / Aucun, ou UA personnalisé.
-- **Pendant le scan** : barre de progression, boutons Arrêter, Ouvrir le dossier, Ouvrir le rapport.
-- **Dernière capture** : aperçu affiché à côté du journal ; clic pour ouvrir l'image.
+- **Cibles** (à gauche) : saisie (IP, CIDR, `AS1234`, nom d'hôte, une par ligne) ou **Charger un fichier / CSV…**.
+  Un compteur indique le nombre d'entrées et une estimation du nombre d'adresses (plages CIDR).
+- **Ports** : liste libre ou préréglages en boutons (Défaut, Web étendu, Services non web, Web + services).
+- **User agents** : boutons à cocher sous les ports, sélection rapide Navigateurs / Robots / Tous / Aucun,
+  UA personnalisé. Aucun coché = UA du navigateur.
+- **Analyse passive** (à droite, en bleu) : « Enrichir les IP et les versions », « Réputation des noms »,
+  « Analyser les certificats TLS », « Inscrire l'URL sur les captures ».
+- **Tests actifs** (en orange, désactivés par défaut, requêtes en plus) : dossiers courants (Index of),
+  fichiers sensibles (.env, .git…), présence d'un WAF.
+- **Réglages avancés** (replié, avec un résumé) : dossier de sortie, tests en parallèle, timeouts, délai entre
+  deux captures, résolution (1366x768, 1920x1080 par défaut, 2560x1440, 4K, mobile).
+- **Périmètre et proxy** (replié, avec un résumé) : voir « Périmètre et proxy ».
+- **Barre d'action**, toujours visible en bas de l'onglet : Lancer le scan, Arrêter, progression, Ouvrir le
+  dossier, Ouvrir le rapport.
+- **Journal / Dernière capture** : deux onglets sous la barre d'action ; un point signale une nouvelle capture.
+  Clic sur l'aperçu pour ouvrir l'image.
 
 Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `screenshots\` à côté de l'exe).
 
@@ -149,6 +152,7 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 | `-save-keys` | enregistre les `-key` dans le fichier de clés | - |
 | `-list-sources` | liste les sources et les clés configurées | - |
 | `-no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
+| `-no-reputation` | désactive seulement la réputation des noms | réputation active |
 | `-no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires, JS, robots, bannières, takeover) | analyse active |
 | `-files` | teste les fichiers sensibles de `files.txt` (signature vérifiée) | non |
 | `-files-wordlist FILE` | liste de fichiers à la place de `files.txt` (active `-files`) | - |
@@ -313,8 +317,9 @@ Désactivable avec `-no-enrich` ou la case de l'interface.
 
 ### 🚦 Réputation des noms (listes de blocage, malware, phishing)
 
-Avec l'enrichissement, chaque nom d'hôte **public** scanné est vérifié (un nom qui pointe vers une IP
-interne n'est jamais envoyé) :
+Chaque nom d'hôte **public** scanné est vérifié (un nom qui pointe vers une IP
+interne n'est jamais envoyé). Désactivable avec `-no-reputation` (ou `-no-enrich`) ou la case
+« Réputation des noms » de l'interface :
 
 | Source | Clé | Ce qui est relevé |
 |---|---|---|

@@ -3,6 +3,54 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Python a son
 propre journal dans le dépôt [Netshot](https://github.com/Wr1ghtShade/Netshot).
 
+## [1.2.1] - 2026-11-13
+
+Refonte de l'interface, étape 1 : en-tête et onglet Scan, d'après la maquette validée (même
+organisation que la version Python 1.2.1).
+
+### Modifié
+
+**En-tête**
+- Onglets dans une barre segmentée, avec des icônes au trait à la place des emojis ; compteurs en
+  pastille (sans parenthèses) sur Scan, Certificats, Leaks et Clés API.
+- Bouton « Quitter » discret (contour rouge, plein seulement au survol).
+- Sélecteur de thème raccourci (« Auto (Windows) », « Clair »…) avec une icône palette.
+
+**Onglet Scan**
+- Colonne de gauche : cibles avec un compteur (entrées et estimation du nombre d'adresses des plages
+  CIDR, « + AS » si un AS est présent), aide sous la zone, ports avec préréglages en boutons
+  (Défaut, Web étendu, Services non web, Web + services ; le bouton actif suit le contenu du
+  champ), user agents en boutons à cocher avec compteur et sélection rapide.
+- Colonne de droite, options en groupes avec interrupteurs :
+  - **Analyse passive** (bleu) : enrichissement, réputation des noms, certificats TLS, URL sur les
+    captures ;
+  - **Tests actifs** (orange, badge « requêtes en plus ») : dossiers courants, fichiers sensibles,
+    présence d'un WAF, avec le nombre de requêtes par service ;
+  - **Réglages avancés** et **Périmètre et proxy** repliés, avec un résumé sur une ligne mis à jour
+    en direct.
+- Barre d'action toujours visible sous l'onglet : Lancer le scan, Arrêter, progression fine,
+  Ouvrir le dossier, Ouvrir le rapport. Avant, elle pouvait sortir de l'écran (1440×900).
+- Journal et dernière capture dans un seul panneau à deux onglets, plus compact ; un point signale
+  une capture pas encore vue. Les autres onglets n'affichent que le journal, comme avant.
+
+**Réputation des noms**
+- Interrupteur séparé de l'enrichissement dans l'interface (champ `reputation` de `/api/start`).
+- Nouvelle option `-no-reputation` ; `-no-enrich` coupe toujours les deux.
+- Sans enrichissement, les noms sont résolus par le résolveur du système pour écarter ceux qui
+  pointent vers une IP interne (aucun appel à un tiers pour ça).
+
+### Fichiers
+- `cmd/netshot/gui.html` (CSS, en-tête, onglet Scan, barre d'action, panneau journal / capture,
+  JavaScript : compteurs, préréglages, résumés, onglets du bas).
+- `cmd/netshot/scan.go` (`Options.Reputation`), `gui.go` (champ `reputation`), `main.go`
+  (`-no-reputation`), `reputation.go` (`resolveHosts`), `version.go`, `README.md`.
+
+### Tests
+- `go vet`, `go test`.
+- Interface ouverte dans Chrome headless (1440×900, 1280×720, thèmes clair, sombre et Terminal),
+  aucune erreur JavaScript ; scan lancé depuis l'interface sur une page locale : progression,
+  rapport, aperçu de capture et point de nouvelle capture vérifiés.
+
 ## [1.2.0] - 2026-11-13
 
 Ajout des contrôles de [web-check](https://web-check.xyz/checks) qui manquaient à NetShot, sans passer

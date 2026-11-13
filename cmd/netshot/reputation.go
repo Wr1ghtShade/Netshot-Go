@@ -304,6 +304,9 @@ const maxVirusTotal = 8
 
 // checkReputation looks up the public host names of the scan. Names of internal IPs are skipped.
 func checkReputation(ctx context.Context, results []Result, exps []*Exposure, keys Keys, logf func(string, ...any)) []*Reputation {
+	if exps == nil {
+		exps = resolveHosts(ctx, results)
+	}
 	internal := map[string]bool{}
 	public := map[string]bool{}
 	for _, x := range exps {
@@ -430,6 +433,39 @@ func checkReputation(ctx context.Context, results []Result, exps []*Exposure, ke
 		out = append(out, r)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return levelRank(out[i].Level) < levelRank(out[j].Level) })
+	return out
+}
+
+// resolveHosts gives, without any third-party lookup, the IPs of the host names scanned (used when
+// the enrichment is off): only their Internal flag and Hosts are filled.
+func resolveHosts(ctx context.Context, results []Result) []*Exposure {
+	seen := map[string]bool{}
+	var out []*Exposure
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 16)
+	for _, r := range results {
+		h := r.Host
+		if seen[h] || net.ParseIP(strings.Trim(h, "[]")) != nil {
+			continue
+		}
+		seen[h] = true
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(h string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			lctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+			addrs, _ := net.DefaultResolver.LookupIPAddr(lctx, h)
+			cancel()
+			mu.Lock()
+			defer mu.Unlock()
+			for _, a := range addrs {
+				out = append(out, &Exposure{IP: a.IP.String(), Internal: isInternalIP(a.IP), Hosts: []string{h}})
+			}
+		}(h)
+	}
+	wg.Wait()
 	return out
 }
 

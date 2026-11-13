@@ -54,6 +54,7 @@ type startRequest struct {
 	Output         string   `json:"output"`
 	Resolution     string   `json:"resolution"` // "1920x1080"
 	Enrich         bool     `json:"enrich"`
+	Reputation     bool     `json:"reputation"`
 	TLS            bool     `json:"tls"`
 	Label          bool     `json:"label"`
 	Dirs           bool     `json:"dirs"`
@@ -365,6 +366,7 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		Output:         filepath.Join(base, "scan_"+time.Now().Format("20060102_150405")),
 		Browser:        s.browser,
 		Enrich:         req.Enrich,
+		Reputation:     req.Reputation,
 		Label:          req.Label,
 		TLS:            req.TLS,
 		Keys:           loadKeys(),

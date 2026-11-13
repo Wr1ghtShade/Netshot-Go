@@ -71,6 +71,7 @@ func main() {
 	saveKeysFlag := fs.Bool("save-keys", false, "store the -key values in "+keysPath())
 	noLabel := fs.Bool("no-label", false, "do not write host:port, URL, status and date at the bottom of the screenshots")
 	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the CVEs of the versions found (NVD) nor check the reputation of the host names (block lists, URLhaus, VirusTotal, Safe Browsing)")
+	noReputation := fs.Bool("no-reputation", false, "do not check the reputation of the host names (block lists, URLhaus, VirusTotal, Safe Browsing); -no-enrich turns it off too")
 	noAnalyze := fs.Bool("no-analyze", false, "do not analyse the pages (technologies, sensitive pages, headers, favicon, similar pages, JS, robots, banners, takeover)")
 	dirsFlag := fs.Bool("dirs", false, "test the common folders of dirs.txt on every web service and capture the directory listings found ('Index of'); extra requests")
 	dirsWordlist := fs.String("dirs-wordlist", "", "folder list for -dirs, one path per line (implies -dirs)")
@@ -249,6 +250,7 @@ func main() {
 		Output:         *output,
 		Browser:        *browser,
 		Enrich:         !*noEnrich,
+		Reputation:     !*noEnrich && !*noReputation,
 		Label:          !*noLabel,
 		TLS:            *tlsScan,
 		Keys:           keys,

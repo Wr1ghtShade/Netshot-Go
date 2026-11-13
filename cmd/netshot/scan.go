@@ -34,6 +34,7 @@ type Options struct {
 	Output         string
 	Browser        string // path to msedge/chrome; empty = auto-detect
 	Enrich         bool   // passive enrichment of the IPs found (InternetDB, LeakIX, KEV, EPSS)
+	Reputation     bool   // reputation of the public host names (block lists, URLhaus, VirusTotal, Safe Browsing)
 	TLS            bool   // analyze the certificates and TLS setup of the https services found
 	Label          bool   // write host:port, URL, status and date at the bottom of each capture
 	Keys           Keys
@@ -482,7 +483,7 @@ feed:
 		}
 	}
 	var reps []*Reputation
-	if opt.Enrich && ctx.Err() == nil && len(results) > 0 {
+	if opt.Reputation && ctx.Err() == nil && len(results) > 0 {
 		reps = checkReputation(ctx, results, exposures, opt.Keys, logf)
 		if err := writeReputationCSV(reps, opt.Output); err != nil {
 			logf("[réputation] %v", err)
