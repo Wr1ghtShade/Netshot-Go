@@ -59,10 +59,6 @@ main.no-bottom { grid-template-rows: auto minmax(0, 1fr); }
 /* Scan: taller journal and capture (original layout) */
 main.tall-bottom { grid-template-rows: auto minmax(0, 1fr) auto minmax(130px, 0.3fr); }
 main.no-bottom .bottom { display: none; }
-/* Journal and last capture share one panel with two tabs (capture: Scan tab only) */
-main.log-only .btab[data-b="cap"] { display: none; }
-main.show-cap .bbody #log { display: none; }
-main:not(.show-cap) .bbody .preview { display: none; }
 /* Domaine: the list of names takes all the height left and scrolls on its own */
 #tab-subs > .panel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
 #ct-result:not([hidden]) { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
@@ -283,16 +279,11 @@ tr.detail td { background: var(--bg); font-size: 12px; }
 table.leaks th { cursor: pointer; white-space: nowrap; user-select: none; }
 table.leaks td { white-space: nowrap; }
 
-/* Bottom: journal / last capture */
-.bottom { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.bottom > .head { margin-bottom: 6px; }
-.btabs { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--bg); }
-.btab { border: 0; background: none; padding: 3px 12px; font-size: 13px; color: var(--muted); border-radius: 6px; font-weight: 500; position: relative; }
-.btab.active { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.12); }
-.btab .dot[hidden] { display: none !important; }
-.btab .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; }
-.bbody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.bbody .preview { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Bottom: one row, two columns, always both visible: journal (left), last capture (right) */
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; min-height: 0; }
+.bottom > .panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.bottom > .panel > .head { margin-bottom: 6px; }
+.bottom > .panel > .head h3 { margin: 0; }
 #log { flex: 1; min-height: 0; background: var(--log-bg); color: var(--log-text); font: 12px/1.45 Consolas, monospace;
        overflow: auto; white-space: pre-wrap; word-break: break-all; padding: 8px; border-radius: 6px; margin: 0;
        border: 1px solid var(--border); }
@@ -304,7 +295,9 @@ table.leaks td { white-space: nowrap; }
 .err { color: var(--danger); }
 @media (max-width: 760px) {
   main { height: auto; grid-template-rows: none; }
-  .scan-grid { grid-template-columns: 1fr; }
+  .scan-grid, .bottom { grid-template-columns: 1fr; }
+  .scan-main > .panel { flex: none; }
+  #targets { flex: none; height: 180px; }
   #log { flex: none; height: 260px; }
   #preview-box { flex: none; height: 240px; }
 }
@@ -553,19 +546,14 @@ table.leaks td { white-space: nowrap; }
     <button id="open-report" disabled><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>Ouvrir le rapport</button>
   </section>
 
-  <section class="panel bottom">
-    <div class="head"><div class="btabs" role="tablist" aria-label="Journal et capture">
-      <button class="btab active" data-b="log">Journal</button>
-      <button class="btab" data-b="cap">Dernière capture<span class="dot" id="cap-dot" hidden></span></button>
-    </div><span data-tools="log"></span></div>
-    <div class="bbody">
-      <pre id="log"></pre>
-      <div class="preview">
-        <div id="preview-info"></div>
-        <div id="preview-box"><span>Aucune capture pour l'instant</span><img id="preview" alt="Dernière capture"></div>
-      </div>
-    </div>
-  </section>
+  <div class="bottom">
+    <section class="panel"><div class="head"><h3>Journal</h3><span data-tools="log"></span></div><pre id="log"></pre></section>
+    <section class="panel preview">
+      <div class="head"><h3>Dernière capture</h3></div>
+      <div id="preview-info"></div>
+      <div id="preview-box"><span>Aucune capture pour l'instant</span><img id="preview" alt="Dernière capture"></div>
+    </section>
+  </div>
 </main>
 
 <script>
@@ -600,20 +588,12 @@ function showTab(name) {
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.id === "tab-" + name));
   document.querySelector("main").classList.toggle("no-bottom", name === "whois");
   document.querySelector("main").classList.toggle("tall-bottom", name === "scan");
-  document.querySelector("main").classList.toggle("log-only", name !== "scan"); // capture: Scan tab only
   document.querySelector("main").classList.toggle("on-scan", name === "scan");
-  if (name !== "scan") showBottom("log");
   try { localStorage.setItem("netshot-tab", name); } catch (e) {}
 }
 document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
-// Journal / last capture
-function showBottom(which) {
-  document.querySelector("main").classList.toggle("show-cap", which === "cap");
-  document.querySelectorAll(".btab").forEach(b => b.classList.toggle("active", b.dataset.b === which));
-  if (which === "cap") $("cap-dot").hidden = true;
-}
-document.querySelectorAll(".btab").forEach(b => b.onclick = () => showBottom(b.dataset.b));
+
 
 function countTargets() {
   const lines = $("targets").value.split(/\r?\n/).map(l => l.split("#")[0].trim()).filter(Boolean);
@@ -1180,7 +1160,6 @@ events.onmessage = ev => {
     img.style.display = "block";
     $("preview-box").querySelector("span").style.display = "none";
     $("preview-info").textContent = `${data.url}  [${data.status}]  ${data.title}  - UA : ${data.ua}`;
-    if (!document.querySelector("main").classList.contains("show-cap")) $("cap-dot").hidden = false;
   } else if (type === "tls") {
     tlsRows.set(data.target, data);
     renderTLS();

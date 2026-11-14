@@ -3,6 +3,25 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Python a son
 propre journal dans le dépôt [Netshot](https://github.com/Wr1ghtShade/Netshot).
 
+## [1.2.4] - 2026-11-14
+
+### Modifié
+- Bas de la fenêtre : le journal et la dernière capture ne sont plus deux onglets. Ils sont
+  côte à côte sur une ligne, en deux colonnes égales (journal à gauche, capture à droite), et
+  restent visibles en permanence sur tous les onglets sauf Whois. Le point « nouvelle capture »
+  disparaît, devenu inutile.
+- Fenêtre étroite (moins de 760 px) : les deux panneaux s'empilent ; la zone des cibles garde
+  180 px de haut au lieu de se réduire à rien (défaut de la 1.2.1).
+- Captures du README refaites (`docs/netshot-go-scan-v124.png`, `docs/netshot-go-rapport-v124.png`).
+
+### Fichiers
+- `cmd/netshot/gui.html` (CSS du bas de page, balisage, JavaScript des anciens onglets retiré),
+  `cmd/netshot/version.go`, `README.md`, `docs/`.
+
+### Tests
+- `go vet`, `go test` ; interface ouverte dans Chrome headless en 1440×900 et 700 px de large,
+  onglets Scan et DNS, scan complet de l'intranet de démonstration ; aucune erreur JavaScript.
+
 ## [1.2.3] - 2026-11-13
 
 Nouveau logo « radar », choisi parmi les six pistes proposées.

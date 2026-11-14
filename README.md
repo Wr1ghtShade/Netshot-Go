@@ -6,9 +6,9 @@ passives (logs Certificate Transparency, DNS passif, archives web). Les IP trouv
 avec des sources gratuites (ports et CVE connus, fuites, priorisation KEV / EPSS).
 Un seul exécutable portable, sans installation.
 
-![NetShot (Go) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-go-scan-v123.png)
+![NetShot (Go) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-go-scan-v124.png)
 
-![NetShot (Go) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-go-rapport-v123.png)
+![NetShot (Go) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-go-rapport-v124.png)
 
 ## 📁 Organisation du dossier
 
@@ -95,7 +95,8 @@ Dans l'ordre du déroulé d'une reconnaissance :
 - **Périmètre et proxy** (replié, avec un résumé) : voir « Périmètre et proxy ».
 - **Barre d'action**, toujours visible en bas de l'onglet : Lancer le scan, Arrêter, progression, Ouvrir le
   dossier, Ouvrir le rapport.
-- **Journal / Dernière capture** : deux onglets sous la barre d'action ; un point signale une nouvelle capture.
+- **Journal et Dernière capture** : en bas de la fenêtre, côte à côte (journal à gauche, capture à droite),
+  toujours visibles sur tous les onglets sauf Whois.
   Clic sur l'aperçu pour ouvrir l'image.
 
 Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `screenshots\` à côté de l'exe).
