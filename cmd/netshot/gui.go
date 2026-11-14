@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -320,6 +321,81 @@ func (s *guiServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "output": opt.Output})
 }
 
+// scanFolderName names the sub-folder of a scan: scan_<label>_<date>. The label is the domain when
+// every host name of the list belongs to the same one (guifort.ovh for groups.msgr.guifort.ovh and
+// www.guifort.ovh), the target itself when there is only one (10.0.0.0-24, AS3215), else nothing.
+func scanFolderName(targets string, now time.Time) string {
+	stamp := now.Format("20060102_150405")
+	if label := scanLabel(targets); label != "" {
+		return "scan_" + label + "_" + stamp
+	}
+	return "scan_" + stamp
+}
+
+func scanLabel(targets string) string {
+	var items []string
+	for _, l := range strings.Split(strings.ReplaceAll(targets, "\r", ""), "\n") {
+		if c := cleanItem(l); c != "" {
+			items = append(items, c)
+		}
+	}
+	if len(items) == 0 {
+		return ""
+	}
+	domain, allNames := "", true
+	for _, it := range items {
+		h := strings.ToLower(strings.TrimSuffix(it, "."))
+		if u, err := url.Parse(h); err == nil && u.Host != "" { // http://host:port/…
+			h = u.Hostname()
+		}
+		if net.ParseIP(h) != nil || strings.Contains(h, "/") || asnPattern.MatchString(h) || !strings.Contains(h, ".") {
+			allNames = false
+			break
+		}
+		d := registrableDomain(h)
+		if domain != "" && d != domain {
+			allNames = false
+			break
+		}
+		domain = d
+	}
+	label := ""
+	switch {
+	case allNames:
+		label = domain
+	case len(items) == 1:
+		label = items[0]
+	}
+	// Keep the name safe for every file system
+	var b strings.Builder
+	for _, r := range label {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '-', r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('-')
+		}
+	}
+	return truncate(strings.Trim(b.String(), "-."), 60)
+}
+
+// registrableDomain keeps the last two labels, or three under a second-level suffix of a country
+// (example.co.uk, example.gouv.fr).
+func registrableDomain(h string) string {
+	parts := strings.Split(h, ".")
+	n := 2
+	if len(parts) >= 3 && len(parts[len(parts)-1]) == 2 {
+		switch parts[len(parts)-2] {
+		case "co", "com", "net", "org", "gov", "gouv", "ac", "edu", "asso", "nom":
+			n = 3
+		}
+	}
+	if len(parts) <= n {
+		return h
+	}
+	return strings.Join(parts[len(parts)-n:], ".")
+}
+
 // prepare validates the form and returns hosts, options and an optional confirmation message.
 func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error) {
 	items := strings.Split(strings.ReplaceAll(req.Targets, "\r", ""), "\n")
@@ -363,7 +439,7 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		UAs:            uas,
 		Width:          clampInt(width, 320, 3840),
 		Height:         clampInt(height, 240, 2160),
-		Output:         filepath.Join(base, "scan_"+time.Now().Format("20060102_150405")),
+		Output:         filepath.Join(base, scanFolderName(req.Targets, time.Now())),
 		Browser:        s.browser,
 		Enrich:         req.Enrich,
 		Reputation:     req.Reputation,

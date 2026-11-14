@@ -153,6 +153,9 @@ func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResul
 			class = strings.Replace(class, "same", "has-diff", 1)
 			badge = fmt.Sprintf(`<span class="diff">differs: %s</span>`, e(strings.Join(diffs, ", ")))
 		}
+		if len(group) > 1 {
+			class += " multi"
+		}
 		fmt.Fprintf(&sb, `<section class="%s"><h2>%s:%d %s</h2>`, class, e(k.host), k.port, badge)
 		for _, x := range byHost[k.host] {
 			sb.WriteString(exposureLine(x))
@@ -204,6 +207,15 @@ h2{font-size:16px;margin:24px 0 8px}
 .ua{background:#246;color:#fff;border-radius:3px;padding:1px 6px;font-size:12px}
 .size{color:#777}
 .diff{background:#c60;color:#fff;border-radius:3px;padding:2px 8px;font-size:12px;font-weight:normal}
+/* Captures: one tile per host:port, several tiles per row; a service captured with several user agents takes a full row */
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:20px 16px;align-items:start;margin-top:12px}
+.shots>section{min-width:0}
+.shots>section.multi{grid-column:1/-1}
+.shots>section:not(.multi)>.grid{grid-template-columns:1fr}
+/* Same height for every tile: the capture is cropped from the top (click to see it whole) */
+.shots .card img{aspect-ratio:16/9;object-fit:cover;object-position:left top}
+.shots h2{font-size:15px;margin:0 0 6px;word-break:break-all}
+.shots .exp{word-break:break-word}
 body.only section.same{display:none}
 .exp{font-size:13px;color:#333;margin:0 0 8px}
 .kev{background:#b00;color:#fff;border-radius:3px;padding:1px 5px;font-size:12px}
@@ -223,7 +235,7 @@ h1.brand img{width:36px;height:36px}
 {{TLS}}
 {{BOTTOM}}
 %s
-%s
+<div class="shots">%s</div>
 <script>
 var c=document.getElementById('only');
 if(c)c.onchange=function(){document.body.classList.toggle('only',c.checked)};

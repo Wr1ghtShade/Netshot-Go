@@ -6,9 +6,9 @@ passives (logs Certificate Transparency, DNS passif, archives web). Les IP trouv
 avec des sources gratuites (ports et CVE connus, fuites, priorisation KEV / EPSS).
 Un seul exécutable portable, sans installation.
 
-![NetShot (Go) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-go-scan-v124.png)
+![NetShot (Go) : onglet Scan après la capture d'un intranet de démonstration](docs/netshot-go-scan-v125.png)
 
-![NetShot (Go) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-go-rapport-v124.png)
+![NetShot (Go) : rapport HTML du même scan (pages sensibles, technologies, TLS, captures)](docs/netshot-go-rapport-v125.png)
 
 ## 📁 Organisation du dossier
 
@@ -99,7 +99,8 @@ Dans l'ordre du déroulé d'une reconnaissance :
   toujours visibles sur tous les onglets sauf Whois.
   Clic sur l'aperçu pour ouvrir l'image.
 
-Chaque scan crée un sous-dossier `scan_<date>` dans le dossier de sortie (par défaut `screenshots\` à côté de l'exe).
+Chaque scan crée un sous-dossier `scan_<domaine>_<date>` (ex. `scan_guifort.ovh_20261114_095743`) dans le dossier de sortie
+(le domaine commun des noms scannés, ou la cible quand il n'y en a qu'une : `scan_10.0.0.0-24_…` ; sinon `scan_<date>`) (par défaut `screenshots\` à côté de l'exe).
 
 #### 🧰 Partout
 

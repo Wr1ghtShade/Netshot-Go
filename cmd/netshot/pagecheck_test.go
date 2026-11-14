@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAnalyzeResources(t *testing.T) {
@@ -96,5 +97,22 @@ func TestReputationLevel(t *testing.T) {
 	}
 	if levelRank("critique") >= levelRank("info") || levelRank("info") >= levelRank("") {
 		t.Error("levelRank order")
+	}
+}
+
+func TestScanFolderName(t *testing.T) {
+	now := time.Date(2026, 11, 14, 9, 57, 43, 0, time.UTC)
+	for targets, want := range map[string]string{
+		"groups.msgr.guifort.ovh\nwww.guifort.ovh\n# commentaire\nguifort.ovh": "scan_guifort.ovh_20261114_095743",
+		"https://intranet.demo.lan:8443/\nwiki.demo.lan":                       "scan_demo.lan_20261114_095743",
+		"www.service-public.gouv.fr":                                           "scan_service-public.gouv.fr_20261114_095743",
+		"10.0.0.0/24":                                                          "scan_10.0.0.0-24_20261114_095743",
+		"AS3215":                                                               "scan_AS3215_20261114_095743",
+		"a.example.com\nb.other.org":                                           "scan_20261114_095743",
+		"192.168.1.1\n192.168.1.2":                                             "scan_20261114_095743",
+	} {
+		if got := scanFolderName(targets, now); got != want {
+			t.Errorf("scanFolderName(%q) = %q, want %q", targets, got, want)
+		}
 	}
 }
