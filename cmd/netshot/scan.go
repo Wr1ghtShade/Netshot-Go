@@ -34,7 +34,7 @@ type Options struct {
 	Output         string
 	Browser        string // path to msedge/chrome; empty = auto-detect
 	Enrich         bool   // passive enrichment of the IPs found (InternetDB, LeakIX, KEV, EPSS)
-	Reputation     bool   // reputation of the public host names (block lists, URLhaus, VirusTotal, Safe Browsing)
+	Reputation     bool   // reputation of the public host names (block lists, URLhaus)
 	TLS            bool   // analyze the certificates and TLS setup of the https services found
 	Label          bool   // write host:port, URL, status and date at the bottom of each capture
 	Keys           Keys

@@ -91,9 +91,9 @@ func TestReputationLevel(t *testing.T) {
 	if l := reputationLevel(r, false); l != "haute" {
 		t.Errorf("quad9: %s", l)
 	}
-	r.SafeBrowsing = []string{"SOCIAL_ENGINEERING"}
-	if l := reputationLevel(r, false); l != "critique" {
-		t.Errorf("safe browsing: %s", l)
+	r.URLhaus = "1 URL malveillante (1 en ligne)"
+	if l := reputationLevel(r, true); l != "critique" {
+		t.Errorf("urlhaus online: %s", l)
 	}
 	if levelRank("critique") >= levelRank("info") || levelRank("info") >= levelRank("") {
 		t.Error("levelRank order")

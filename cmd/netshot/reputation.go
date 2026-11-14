@@ -5,12 +5,9 @@ package main
 //   - filtering DNS resolvers: Quad9 (threats), Cloudflare 1.1.1.2 (malware), OpenDNS (phishing),
 //     AdGuard DNS (ads and trackers), each compared with an unfiltered answer. No key.
 //   - URLhaus (abuse.ch, free key "abusech"): malicious URLs known on the host, Spamhaus DBL / SURBL
-//   - VirusTotal (key "virustotal", already used for the subdomains): engines flagging the domain
-//   - Google Safe Browsing (free key "safebrowsing"): malware, phishing, unwanted software
 // Only public host names are sent: a name that resolves to an internal IP never leaves the machine.
 
 import (
-	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -23,21 +20,17 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 type Reputation struct {
-	Host         string   `json:"host"`
-	Level        string   `json:"level"`                   // critique, haute, moyenne, info, "" (rien)
-	Blocked      []string `json:"blocked_by,omitempty"`    // filtering resolvers that block the name
-	URLhaus      string   `json:"urlhaus,omitempty"`       // summary of the URLhaus answer
-	VirusTotal   string   `json:"virustotal,omitempty"`    // "3 malveillant(s), 1 suspect(s) / 94 moteurs"
-	VTMalicious  int      `json:"vt_malicious,omitempty"`  // engines saying malicious
-	SafeBrowsing []string `json:"safe_browsing,omitempty"` // threat types
-	Errors       []string `json:"errors,omitempty"`
+	Host    string   `json:"host"`
+	Level   string   `json:"level"`                // critique, haute, info, "" (rien)
+	Blocked []string `json:"blocked_by,omitempty"` // filtering resolvers that block the name
+	URLhaus string   `json:"urlhaus,omitempty"`    // summary of the URLhaus answer
+	Errors  []string `json:"errors,omitempty"`
 }
 
 // dnsFilter is a filtering resolver and what it blocks.
@@ -185,97 +178,6 @@ func urlhausHost(ctx context.Context, host, key string) (string, bool, error) {
 	return strings.Join(parts, " ; "), online > 0, nil
 }
 
-// virusTotalDomain returns the engines that flag the domain.
-func virusTotalDomain(ctx context.Context, domain, key string) (string, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.virustotal.com/api/v3/domains/"+url.PathEscape(domain), nil)
-	if err != nil {
-		return "", 0, err
-	}
-	req.Header.Set("x-apikey", key)
-	resp, err := repClient.Do(req)
-	if err != nil {
-		return "", 0, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 404 {
-		return "", 0, nil
-	}
-	if resp.StatusCode != 200 {
-		return "", 0, fmt.Errorf("VirusTotal HTTP %d", resp.StatusCode)
-	}
-	var data struct {
-		Data struct {
-			Attributes struct {
-				Stats map[string]int `json:"last_analysis_stats"`
-			} `json:"attributes"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(&data); err != nil {
-		return "", 0, err
-	}
-	st := data.Data.Attributes.Stats
-	total := 0
-	for _, n := range st {
-		total += n
-	}
-	if st["malicious"] == 0 && st["suspicious"] == 0 {
-		return "", 0, nil
-	}
-	return fmt.Sprintf("%d malveillant(s), %d suspect(s) / %d moteurs", st["malicious"], st["suspicious"], total), st["malicious"], nil
-}
-
-// safeBrowsing checks URLs in one request (Lookup API v4): url -> threat types.
-func safeBrowsing(ctx context.Context, urls []string, key string) (map[string][]string, error) {
-	type entry struct {
-		URL string `json:"url"`
-	}
-	var entries []entry
-	for _, u := range urls {
-		entries = append(entries, entry{u})
-	}
-	body, _ := json.Marshal(map[string]any{
-		"client": map[string]string{"clientId": "netshot", "clientVersion": version},
-		"threatInfo": map[string]any{
-			"threatTypes":      []string{"MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE", "POTENTIALLY_HARMFUL_APPLICATION"},
-			"platformTypes":    []string{"ANY_PLATFORM"},
-			"threatEntryTypes": []string{"URL"},
-			"threatEntries":    entries,
-		},
-	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		"https://safebrowsing.googleapis.com/v4/threatMatches:find?key="+url.QueryEscape(key), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := repClient.Do(req)
-	if err != nil {
-		return nil, redactURLError(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Safe Browsing HTTP %d", resp.StatusCode)
-	}
-	var data struct {
-		Matches []struct {
-			ThreatType string `json:"threatType"`
-			Threat     struct {
-				URL string `json:"url"`
-			} `json:"threat"`
-		} `json:"matches"`
-	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&data); err != nil {
-		return nil, err
-	}
-	out := map[string][]string{}
-	for _, m := range data.Matches {
-		if !containsStr(out[m.Threat.URL], m.ThreatType) {
-			out[m.Threat.URL] = append(out[m.Threat.URL], m.ThreatType)
-		}
-	}
-	return out, nil
-}
-
 // reputationLevel ranks what was found.
 func reputationLevel(r *Reputation, urlhausOnline bool) string {
 	security := false
@@ -287,20 +189,15 @@ func reputationLevel(r *Reputation, urlhausOnline bool) string {
 		}
 	}
 	switch {
-	case len(r.SafeBrowsing) > 0 || urlhausOnline || r.VTMalicious >= 3:
+	case urlhausOnline:
 		return "critique"
-	case security || r.URLhaus != "" || r.VTMalicious > 0:
+	case security || r.URLhaus != "":
 		return "haute"
-	case r.VirusTotal != "":
-		return "moyenne"
 	case len(r.Blocked) > 0:
 		return "info"
 	}
 	return ""
 }
-
-// maxVirusTotal caps the VirusTotal lookups (free API: 4 requests per minute).
-const maxVirusTotal = 8
 
 // checkReputation looks up the public host names of the scan. Names of internal IPs are skipped.
 func checkReputation(ctx context.Context, results []Result, exps []*Exposure, keys Keys, logf func(string, ...any)) []*Reputation {
@@ -319,35 +216,25 @@ func checkReputation(ctx context.Context, results []Result, exps []*Exposure, ke
 		}
 	}
 	var names []string
-	urlsByHost := map[string][]string{}
+	seen := map[string]bool{}
 	for _, r := range results {
 		h := strings.ToLower(r.Host)
-		if net.ParseIP(strings.Trim(h, "[]")) != nil || internal[r.Host] || !public[r.Host] {
+		if net.ParseIP(strings.Trim(h, "[]")) != nil || internal[r.Host] || !public[r.Host] || seen[h] {
 			continue
 		}
-		if _, ok := urlsByHost[h]; !ok {
-			names = append(names, h)
-		}
-		for _, u := range []string{r.URL, r.FinalURL} {
-			if u != "" && !containsStr(urlsByHost[h], u) {
-				urlsByHost[h] = append(urlsByHost[h], u)
-			}
-		}
+		seen[h] = true
+		names = append(names, h)
 	}
 	if len(names) == 0 {
 		return nil
 	}
 	sort.Strings(names)
-	abusech, vt, sb := keys.get("abusech"), keys.get("virustotal"), keys.get("safebrowsing")
+	abusech := keys.get("abusech")
 	srcs := []string{"résolveurs filtrants (Quad9, Cloudflare, OpenDNS, AdGuard)"}
 	if abusech != "" {
 		srcs = append(srcs, "URLhaus")
-	}
-	if vt != "" {
-		srcs = append(srcs, "VirusTotal")
-	}
-	if sb != "" {
-		srcs = append(srcs, "Safe Browsing")
+	} else {
+		srcs = append(srcs, "URLhaus ignoré (pas de clé abusech)")
 	}
 	logf("[réputation] %d nom(s) public(s) : %s", len(names), strings.Join(srcs, ", "))
 
@@ -374,49 +261,6 @@ func checkReputation(ctx context.Context, results []Result, exps []*Exposure, ke
 		}(i, n)
 	}
 	wg.Wait()
-	if vt != "" {
-		for i, n := range names {
-			if i == maxVirusTotal || ctx.Err() != nil {
-				if i == maxVirusTotal {
-					logf("[réputation] VirusTotal limité aux %d premiers noms (API gratuite : 4 requêtes / minute)", maxVirusTotal)
-				}
-				break
-			}
-			if i > 0 {
-				select {
-				case <-time.After(15 * time.Second):
-				case <-ctx.Done():
-				}
-			}
-			s, mal, err := virusTotalDomain(ctx, n, vt)
-			if err != nil {
-				reps[i].Errors = append(reps[i].Errors, err.Error())
-			}
-			reps[i].VirusTotal, reps[i].VTMalicious = s, mal
-		}
-	}
-	if sb != "" && ctx.Err() == nil {
-		var all []string
-		for _, n := range names {
-			all = append(all, urlsByHost[n]...)
-		}
-		for start := 0; start < len(all); start += 500 {
-			matches, err := safeBrowsing(ctx, all[start:min(len(all), start+500)], sb)
-			if err != nil {
-				logf("[réputation] Safe Browsing : %v", err)
-				break
-			}
-			for i, n := range names {
-				for _, u := range urlsByHost[n] {
-					for _, t := range matches[u] {
-						if !containsStr(reps[i].SafeBrowsing, t) {
-							reps[i].SafeBrowsing = append(reps[i].SafeBrowsing, t)
-						}
-					}
-				}
-			}
-		}
-	}
 	unreachable := true
 	for _, r := range reps {
 		unreachable = unreachable && containsStr(r.Errors, dnsUnreachable)
@@ -485,12 +329,6 @@ func reputationSummary(r *Reputation) string {
 	if r.URLhaus != "" {
 		parts = append(parts, "URLhaus : "+r.URLhaus)
 	}
-	if r.VirusTotal != "" {
-		parts = append(parts, "VirusTotal : "+r.VirusTotal)
-	}
-	if len(r.SafeBrowsing) > 0 {
-		parts = append(parts, "Safe Browsing : "+strings.Join(r.SafeBrowsing, ", "))
-	}
 	return strings.Join(parts, " ; ")
 }
 
@@ -504,10 +342,9 @@ func writeReputationCSV(reps []*Reputation, outdir string) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	w.Write([]string{"host", "level", "blocked_by", "urlhaus", "virustotal", "vt_malicious", "safe_browsing", "errors"})
+	w.Write([]string{"host", "level", "blocked_by", "urlhaus", "errors"})
 	for _, r := range reps {
-		w.Write([]string{r.Host, r.Level, strings.Join(r.Blocked, "; "), r.URLhaus, r.VirusTotal, strconv.Itoa(r.VTMalicious),
-			strings.Join(r.SafeBrowsing, " "), strings.Join(r.Errors, "; ")})
+		w.Write([]string{r.Host, r.Level, strings.Join(r.Blocked, "; "), r.URLhaus, strings.Join(r.Errors, "; ")})
 	}
 	w.Flush()
 	return w.Error()

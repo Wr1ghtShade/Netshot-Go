@@ -257,10 +257,10 @@ func buildSheets(results []Result, exps []*Exposure, inv []*TechEntry, takeovers
 		sheets = append(sheets, pc)
 	}
 	if len(reps) > 0 {
-		rp := sheet{name: "Réputation", header: []string{"Niveau", "Nom", "Bloqué par", "URLhaus", "VirusTotal", "Safe Browsing", "Erreurs"}}
+		rp := sheet{name: "Réputation", header: []string{"Niveau", "Nom", "Bloqué par", "URLhaus", "Erreurs"}}
 		for _, r := range reps {
-			rp.rows = append(rp.rows, []any{r.Level, r.Host, strings.Join(r.Blocked, ", "), r.URLhaus, r.VirusTotal,
-				strings.Join(r.SafeBrowsing, ", "), strings.Join(r.Errors, "; ")})
+			rp.rows = append(rp.rows, []any{r.Level, r.Host, strings.Join(r.Blocked, ", "), r.URLhaus,
+				strings.Join(r.Errors, "; ")})
 		}
 		sheets = append(sheets, rp)
 	}
