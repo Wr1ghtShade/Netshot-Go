@@ -61,6 +61,8 @@ type startRequest struct {
 	Dirs           bool     `json:"dirs"`
 	Files          bool     `json:"files"`
 	WAFProbe       bool     `json:"waf_probe"`
+	CIPIPs         *int     `json:"cip_ips"`     // nil = default
+	CIPDomains     *int     `json:"cip_domains"` // nil = default
 	Proxy          string   `json:"proxy"`
 	Exclude        string   `json:"exclude"`
 	Confirm        bool     `json:"confirm"`
@@ -448,6 +450,7 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		Keys:           loadKeys(),
 		Analyze:        true,
 		WAFProbe:       req.WAFProbe,
+		CIP:            CIPLimits{IPs: intOr(req.CIPIPs, defaultCIPIPs, 0, 50), Domains: intOr(req.CIPDomains, defaultCIPDomains, 0, 20)},
 	}
 	if req.Dirs {
 		opt.Dirs = dirWords(nil)
@@ -752,3 +755,11 @@ func (s *guiServer) handleQuit(w http.ResponseWriter, r *http.Request) {
 
 func clampInt(v, lo, hi int) int           { return max(lo, min(hi, v)) }
 func clampFloat(v, lo, hi float64) float64 { return max(lo, min(hi, v)) }
+
+// intOr returns *p clamped to [lo, hi], or def when p is nil.
+func intOr(p *int, def, lo, hi int) int {
+	if p == nil {
+		return def
+	}
+	return clampInt(*p, lo, hi)
+}

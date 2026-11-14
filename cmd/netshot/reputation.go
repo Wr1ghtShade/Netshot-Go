@@ -30,7 +30,11 @@ type Reputation struct {
 	Level   string   `json:"level"`                // critique, haute, info, "" (rien)
 	Blocked []string `json:"blocked_by,omitempty"` // filtering resolvers that block the name
 	URLhaus string   `json:"urlhaus,omitempty"`    // summary of the URLhaus answer
-	Errors  []string `json:"errors,omitempty"`
+	// Criminal IP (criminalip.go): domain report, or IP report when Host is an IP
+	CriminalIP string   `json:"criminalip,omitempty"`
+	CIPLevel   string   `json:"criminalip_level,omitempty"`
+	Names      []string `json:"names,omitempty"` // scanned names of an IP row
+	Errors     []string `json:"errors,omitempty"`
 }
 
 // dnsFilter is a filtering resolver and what it blocks.
@@ -192,15 +196,15 @@ func reputationLevel(r *Reputation, urlhausOnline bool) string {
 	case urlhausOnline:
 		return "critique"
 	case security || r.URLhaus != "":
-		return "haute"
+		return worse("haute", r.CIPLevel)
 	case len(r.Blocked) > 0:
-		return "info"
+		return worse("info", r.CIPLevel)
 	}
-	return ""
+	return r.CIPLevel
 }
 
 // checkReputation looks up the public host names of the scan. Names of internal IPs are skipped.
-func checkReputation(ctx context.Context, results []Result, exps []*Exposure, keys Keys, logf func(string, ...any)) []*Reputation {
+func checkReputation(ctx context.Context, results []Result, exps []*Exposure, keys Keys, cip CIPLimits, logf func(string, ...any)) []*Reputation {
 	if exps == nil {
 		exps = resolveHosts(ctx, results)
 	}
@@ -225,16 +229,20 @@ func checkReputation(ctx context.Context, results []Result, exps []*Exposure, ke
 		seen[h] = true
 		names = append(names, h)
 	}
-	if len(names) == 0 {
-		return nil
-	}
 	sort.Strings(names)
+	cipKey := keys.get("criminalip")
+	if len(names) == 0 {
+		return finishReputation(checkCriminalIP(ctx, nil, nil, exps, results, cipKey, cip, logf), nil, logf)
+	}
 	abusech := keys.get("abusech")
 	srcs := []string{"résolveurs filtrants (Quad9, Cloudflare, OpenDNS, AdGuard)"}
 	if abusech != "" {
 		srcs = append(srcs, "URLhaus")
 	} else {
 		srcs = append(srcs, "URLhaus ignoré (pas de clé abusech)")
+	}
+	if cipKey != "" && (cip.IPs > 0 || cip.Domains > 0) {
+		srcs = append(srcs, "Criminal IP")
 	}
 	logf("[réputation] %d nom(s) public(s) : %s", len(names), strings.Join(srcs, ", "))
 
@@ -268,16 +276,24 @@ func checkReputation(ctx context.Context, results []Result, exps []*Exposure, ke
 	if unreachable {
 		logf("[réputation] listes de blocage non vérifiées : %s", dnsUnreachable)
 	}
-	var out []*Reputation
+	urlhausOn := map[*Reputation]bool{}
 	for i, r := range reps {
-		r.Level = reputationLevel(r, online[i])
+		urlhausOn[r] = online[i]
+	}
+	reps = checkCriminalIP(ctx, reps, names, exps, results, cipKey, cip, logf)
+	return finishReputation(reps, urlhausOn, logf)
+}
+
+// finishReputation ranks the rows, logs those with a finding and sorts them by severity.
+func finishReputation(reps []*Reputation, urlhausOn map[*Reputation]bool, logf func(string, ...any)) []*Reputation {
+	for _, r := range reps {
+		r.Level = reputationLevel(r, urlhausOn[r])
 		if r.Level != "" {
 			logf("[réputation] %s  %s  %s", r.Host, r.Level, reputationSummary(r))
 		}
-		out = append(out, r)
 	}
-	sort.SliceStable(out, func(i, j int) bool { return levelRank(out[i].Level) < levelRank(out[j].Level) })
-	return out
+	sort.SliceStable(reps, func(i, j int) bool { return levelRank(reps[i].Level) < levelRank(reps[j].Level) })
+	return reps
 }
 
 // resolveHosts gives, without any third-party lookup, the IPs of the host names scanned (used when
@@ -329,6 +345,12 @@ func reputationSummary(r *Reputation) string {
 	if r.URLhaus != "" {
 		parts = append(parts, "URLhaus : "+r.URLhaus)
 	}
+	if r.CriminalIP != "" {
+		parts = append(parts, "Criminal IP : "+r.CriminalIP)
+	}
+	if len(r.Names) > 0 {
+		parts = append(parts, "noms : "+strings.Join(r.Names, ", "))
+	}
 	return strings.Join(parts, " ; ")
 }
 
@@ -342,9 +364,9 @@ func writeReputationCSV(reps []*Reputation, outdir string) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	w.Write([]string{"host", "level", "blocked_by", "urlhaus", "errors"})
+	w.Write([]string{"host", "level", "blocked_by", "urlhaus", "criminalip", "names", "errors"})
 	for _, r := range reps {
-		w.Write([]string{r.Host, r.Level, strings.Join(r.Blocked, "; "), r.URLhaus, strings.Join(r.Errors, "; ")})
+		w.Write([]string{r.Host, r.Level, strings.Join(r.Blocked, "; "), r.URLhaus, r.CriminalIP, strings.Join(r.Names, " "), strings.Join(r.Errors, "; ")})
 	}
 	w.Flush()
 	return w.Error()
@@ -363,8 +385,8 @@ func reputationSection(reps []*Reputation) string {
 		rows = append(rows, fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, sevBadge(r.Level), e(r.Host), e(reputationSummary(r))))
 	}
 	if len(rows) == 0 {
-		return fmt.Sprintf(`<p><b>Réputation</b> : %d nom(s) vérifié(s), aucun sur une liste de blocage ou de menaces.</p>`, len(reps))
+		return fmt.Sprintf(`<p><b>Réputation</b> : %d nom(s) ou IP vérifié(s), aucun sur une liste de blocage ou de menaces.</p>`, len(reps))
 	}
-	return fmt.Sprintf(`<details open><summary><b>Réputation (listes de blocage, malware, phishing)</b> - %d nom(s) signalé(s) sur %d</summary>`+
-		`<table><tr><th>Niveau</th><th>Nom</th><th>Constat</th></tr>%s</table></details>`, len(rows), len(reps), strings.Join(rows, ""))
+	return fmt.Sprintf(`<details open><summary><b>Réputation (listes de blocage, malware, phishing)</b> - %d signalé(s) sur %d</summary>`+
+		`<table><tr><th>Niveau</th><th>Nom / IP</th><th>Constat</th></tr>%s</table></details>`, len(rows), len(reps), strings.Join(rows, ""))
 }

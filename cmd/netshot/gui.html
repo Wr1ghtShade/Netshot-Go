@@ -369,7 +369,7 @@ table.leaks td { white-space: nowrap; }
           <section class="panel g-passive">
             <div class="group-title"><h3><svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>Analyse passive</h3></div>
             <label class="opt" title="IP publiques uniquement : organisation, services, versions et CVE (Shodan avec clé, sinon Shodan InternetDB gratuit), fuites (LeakIX, avec clé), priorisation CISA KEV et EPSS. Les IP internes ne sont jamais envoyées."><span><b>Enrichir les IP et les versions</b><small>Shodan, LeakIX, NVD, CISA KEV, EPSS</small></span><input type="checkbox" class="sw" id="enrich" checked></label>
-            <label class="opt" title="Noms publics seulement : résolveurs DNS filtrants (Quad9, Cloudflare, OpenDNS, AdGuard), et URLhaus (clé abusech)."><span><b>Réputation des noms</b><small>Listes de blocage DNS, URLhaus</small></span><input type="checkbox" class="sw" id="reputation" checked></label>
+            <label class="opt" title="Noms publics seulement : résolveurs DNS filtrants (Quad9, Cloudflare, OpenDNS, AdGuard), URLhaus (clé abusech) et Criminal IP (clé criminalip, quelques IP et domaines par scan)."><span><b>Réputation des noms</b><small>Listes de blocage DNS, URLhaus, Criminal IP</small></span><input type="checkbox" class="sw" id="reputation" checked></label>
             <label class="opt" title="Après le scan, analyse le certificat et la configuration TLS de chaque service https trouvé (résultats dans l'onglet Certificats et le rapport)"><span><b>Analyser les certificats TLS</b><small>Versions, suites, PQC, chaîne, HSTS</small></span><input type="checkbox" class="sw" id="tls-scan" checked></label>
             <label class="opt" title="Écrit hôte:port, URL, code HTTP et date en bas de chaque capture"><span><b>Inscrire l'URL sur les captures</b><small>Bandeau hôte:port, URL, statut, date</small></span><input type="checkbox" class="sw" id="label-shots" checked></label>
           </section>
@@ -395,6 +395,8 @@ table.leaks td { white-space: nowrap; }
                 <option value="3840x2160">3840 x 2160 (4K)</option>
                 <option value="390x844">390 x 844 (mobile)</option>
               </select>
+              <label for="cip-ips" title="Avec une clé criminalip : nombre d'IP publiques vérifiées par scan (offre gratuite : 50 par mois). 0 = aucune.">Criminal IP : IP</label><input type="number" id="cip-ips" class="num" value="5" min="0" max="50">
+              <label for="cip-domains" title="Avec une clé criminalip : nombre de domaines analysés par scan (offre gratuite : 100 analyses par mois). 0 = aucun.">Criminal IP : domaines</label><input type="number" id="cip-domains" class="num" value="1" min="0" max="20">
             </div>
           </details>
           <details class="panel fold" id="scope">
@@ -1114,6 +1116,8 @@ async function start(confirmed) {
     dirs: $("probe-dirs").checked,
     files: $("probe-files").checked,
     waf_probe: $("waf-probe").checked,
+    cip_ips: Math.max(0, parseInt($("cip-ips").value, 10) || 0),
+    cip_domains: Math.max(0, parseInt($("cip-domains").value, 10) || 0),
     proxy: $("proxy").value,
     exclude: $("exclude").value,
     confirm: !!confirmed,

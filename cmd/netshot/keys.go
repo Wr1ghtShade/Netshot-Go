@@ -31,6 +31,7 @@ var keySources = []struct {
 	{"leakcheck", "LeakCheck", "https://leakcheck.io/"},
 	{"nvd", "NVD (NIST)", "https://nvd.nist.gov/developers/request-an-api-key"},
 	{"abusech", "abuse.ch (URLhaus)", "https://auth.abuse.ch/"},
+	{"criminalip", "Criminal IP", "https://www.criminalip.io/mypage/information"},
 }
 
 // keysPath is keys.json next to the exe (in the current folder if the exe path is unknown).

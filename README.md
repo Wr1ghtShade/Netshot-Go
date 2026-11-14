@@ -32,7 +32,8 @@ netshot-go/
 │   ├── whois.go              whois d'un domaine, d'une IP ou d'un AS (RDAP + port 43)
 │   ├── leakcheck.go          fuites de données (LeakCheck Pro API v2), onglet Leaks
 │   ├── pagecheck.go          contenu mixte, SRI, traqueurs, WAF (passif et -waf-probe)
-│   ├── reputation.go         réputation des noms : résolveurs filtrants, URLhaus
+│   ├── reputation.go         réputation des noms : résolveurs filtrants, URLhaus, Criminal IP
+│   ├── criminalip.go         Criminal IP : analyse de domaine et score des IP (crédits plafonnés)
 │   ├── settings.go           réglages de l'interface (thème) dans settings.json
 │   ├── window_*.go           ouverture maximisée de la fenêtre (Windows)
 │   ├── wordlist.go, subdomains.txt   dictionnaire de la force brute DNS
@@ -157,6 +158,8 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 | `-list-sources` | liste les sources et les clés configurées | - |
 | `-no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `-no-reputation` | désactive seulement la réputation des noms | réputation active |
+| `-criminalip-ips N` | IP publiques vérifiées par Criminal IP à chaque scan (clé `criminalip`) ; 0 = aucune | 5 |
+| `-criminalip-domains N` | domaines analysés par Criminal IP à chaque scan ; 0 = aucun | 1 |
 | `-no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires, JS, robots, bannières, takeover) | analyse active |
 | `-files` | teste les fichiers sensibles de `files.txt` (signature vérifiée) | non |
 | `-files-wordlist FILE` | liste de fichiers à la place de `files.txt` (active `-files`) | - |
@@ -280,7 +283,7 @@ Saisie : bloc « Clés API » de l'interface, ou `-key source=CLÉ -save-keys`.
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 
 Services acceptant une clé : certspotter, hackertarget, urlscan, virustotal, dnsdumpster, domscan,
-viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus).
+viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus), criminalip (Criminal IP).
 
 Non inclus : SecurityTrails (plus de formule gratuite). ViewDNS passe uniquement par son API officielle
 (la page web est protégée par un contrôle anti-robot Cloudflare).
@@ -329,10 +332,14 @@ interne n'est jamais envoyé). Désactivable avec `-no-reputation` (ou `-no-enri
 |---|---|---|
 | **Résolveurs DNS filtrants** | aucune | Quad9 (malware, phishing), Cloudflare 1.1.1.2 (malware), OpenDNS (phishing), AdGuard DNS (publicité, traqueurs) : un nom qui résout normalement (1.1.1.1) mais que ces résolveurs bloquent (NXDOMAIN, `0.0.0.0`, page de blocage) est signalé. Le port 53 sortant doit être ouvert ; sinon le journal l'indique |
 | **URLhaus** (abuse.ch) | `abusech`, gratuite | URL malveillantes connues sur le nom (et combien sont encore en ligne), présence dans Spamhaus DBL et SURBL |
+| **Criminal IP** | `criminalip`, gratuite (Mon compte > API Key) | **domaine** : analyse « lite » du domaine principal (score, probabilité de phishing, catégorie malware / phishing, punycode, faux lien https) ; **IP** : score entrant et sortant, VPN / Tor / proxy / scanner, signalements d'abus, sur les IP publiques qui portent le plus de services. Compte gratuit : 50 IP et 100 analyses de domaine par mois, d'où des plafonds par scan : `-criminalip-ips 5` et `-criminalip-domains 1` par défaut (0 = aucun), réglables aussi dans « Réglages avancés ». Arrêt immédiat si la clé est refusée ou les crédits épuisés |
 
-Niveau : **critique** (URL malveillante encore en ligne selon URLhaus), **haute** (bloqué par un
-résolveur de sécurité, ou nom connu d'URLhaus), **info** (bloqué seulement par AdGuard, donc
-publicité ou traqueur). Sans clé `abusech`, seuls les résolveurs filtrants sont interrogés.
+Niveau : **critique** (URL malveillante encore en ligne selon URLhaus, score Criminal IP « Critical »
+ou domaine classé malware / phishing), **haute** (bloqué par un résolveur de sécurité, nom connu
+d'URLhaus, score « Dangerous », phishing probable à 70 % ou plus), **moyenne** (score « Moderate »),
+**info** (bloqué seulement par AdGuard, donc publicité ou traqueur). Sans clé `abusech` ni
+`criminalip`, seuls les résolveurs filtrants sont interrogés. Les IP vérifiées par Criminal IP ont
+leur propre ligne (avec les noms scannés qui y pointent).
 Section « Réputation » en tête du rapport, `reputation.csv`, onglet « Réputation » de `results.xlsx`.
 
 ## 🔬 Analyse des pages

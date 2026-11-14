@@ -34,7 +34,7 @@ type Options struct {
 	Output         string
 	Browser        string // path to msedge/chrome; empty = auto-detect
 	Enrich         bool   // passive enrichment of the IPs found (InternetDB, LeakIX, KEV, EPSS)
-	Reputation     bool   // reputation of the public host names (block lists, URLhaus)
+	Reputation     bool   // reputation of the public host names (block lists, URLhaus, Criminal IP)
 	TLS            bool   // analyze the certificates and TLS setup of the https services found
 	Label          bool   // write host:port, URL, status and date at the bottom of each capture
 	Keys           Keys
@@ -42,6 +42,7 @@ type Options struct {
 	Dirs           []string    // -dirs: folders to test for directory listings (nil = off)
 	Files          []FileRule  // -files: sensitive files to test (nil = off)
 	WAFProbe       bool        // -waf-probe: one request with a harmless attack-like string per web service
+	CIP            CIPLimits   // Criminal IP lookups per scan (with the key "criminalip")
 	Proxy          *Proxy      // pages, favicons, folders and files go through it
 	Exclusions     *Exclusions // out-of-scope targets, never scanned
 }
@@ -484,7 +485,7 @@ feed:
 	}
 	var reps []*Reputation
 	if opt.Reputation && ctx.Err() == nil && len(results) > 0 {
-		reps = checkReputation(ctx, results, exposures, opt.Keys, logf)
+		reps = checkReputation(ctx, results, exposures, opt.Keys, opt.CIP, logf)
 		if err := writeReputationCSV(reps, opt.Output); err != nil {
 			logf("[réputation] %v", err)
 		}
