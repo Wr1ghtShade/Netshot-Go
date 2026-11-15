@@ -455,7 +455,13 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 	worker := func() {
 		for j := range jobs {
 			if ctx.Err() == nil && isOpen(ctx, opt, j.host, j.port) {
-				scanService(ctx, browserCtx, opt, ws, limiter, j.host, j.port, add, cb, logf)
+				o := opt
+				if webOnly[j.host] {
+					// SaaS page of the tenant (SharePoint, Okta…): the provider's infrastructure, not the
+					// client's: screenshot and passive analysis only, no folder, file or WAF probe
+					o.Dirs, o.Files, o.WAFProbe = nil, nil, false
+				}
+				scanService(ctx, browserCtx, o, ws, limiter, j.host, j.port, add, cb, logf)
 			}
 			atomic.AddInt64(&done, 1)
 		}
