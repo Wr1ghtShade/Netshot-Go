@@ -15,7 +15,7 @@ import (
 )
 
 func writeResultsJSON(outdir string, results []Result, exps []*Exposure, tlsResults []TLSResult, inv []*TechEntry,
-	groups [][]int, takeovers []Takeover, reps []*Reputation) error {
+	groups [][]int, takeovers []Takeover, reps []*Reputation, cloud *CloudReport) error {
 	var similar [][]string
 	for _, g := range groups {
 		var urls []string
@@ -34,6 +34,7 @@ func writeResultsJSON(outdir string, results []Result, exps []*Exposure, tlsResu
 		"similar_pages":   similar,
 		"takeovers":       takeovers,
 		"reputation":      reps,
+		"cloud":           cloud,
 	}
 	b, err := json.MarshalIndent(data, "", " ")
 	if err != nil {
@@ -190,7 +191,7 @@ func writeXLSX(path string, sheets []sheet) error {
 	return z.Close()
 }
 
-func buildSheets(results []Result, exps []*Exposure, inv []*TechEntry, takeovers []Takeover, reps []*Reputation) []sheet {
+func buildSheets(results []Result, exps []*Exposure, inv []*TechEntry, takeovers []Takeover, reps []*Reputation, cloud *CloudReport) []sheet {
 	var sheets []sheet
 	svc := sheet{name: "Services", header: []string{"Hôte", "Port", "UA", "URL", "Code HTTP", "Titre", "URL finale", "Repères",
 		"Technologies", "Favicon (hash)", "Groupe visuel", "Constats en-têtes", "Capture", "Erreur"}}
@@ -290,6 +291,17 @@ func buildSheets(results []Result, exps []*Exposure, inv []*TechEntry, takeovers
 	}
 	if len(js.rows) > 0 {
 		sheets = append(sheets, js)
+	}
+	if !cloud.empty() {
+		c := sheet{name: "Cloud et SaaS", header: []string{"Type", "Fournisseur / service", "Catégorie / service", "Nom / IP", "Indice / région", "Détail"}}
+		for _, r := range cloudRows(cloud) {
+			row := make([]any, len(r))
+			for i, v := range r {
+				row[i] = v
+			}
+			c.rows = append(c.rows, row)
+		}
+		sheets = append(sheets, c)
 	}
 	if len(takeovers) > 0 {
 		t := sheet{name: "Takeover", header: []string{"Gravité", "Nom", "Chaîne CNAME", "Service", "Raison"}}

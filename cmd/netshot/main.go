@@ -71,6 +71,8 @@ func main() {
 	saveKeysFlag := fs.Bool("save-keys", false, "store the -key values in "+keysPath())
 	noLabel := fs.Bool("no-label", false, "do not write host:port, URL, status and date at the bottom of the screenshots")
 	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the CVEs of the versions found (NVD) nor check the reputation of the host names (block lists, URLhaus)")
+	noCloud := fs.Bool("no-cloud", false, "do not look for the cloud and SaaS footprint of the domains (Microsoft 365 tenant, SaaS, AWS / Azure / GCP / Cloudflare IPs)")
+	noCloudTargets := fs.Bool("no-cloud-targets", false, "keep the cloud footprint but do not add the domains and tenant pages found to the scan")
 	noReputation := fs.Bool("no-reputation", false, "do not check the reputation of the host names (block lists, URLhaus, Criminal IP); -no-enrich turns it off too")
 	cipIPs := fs.Int("criminalip-ips", defaultCIPIPs, "with the key criminalip: public IPs looked up per scan (free account: 50 per month); 0 = none")
 	cipDomains := fs.Int("criminalip-domains", defaultCIPDomains, "with the key criminalip: registrable domains scanned per scan (free account: 100 per month); 0 = none")
@@ -253,6 +255,8 @@ func main() {
 		Browser:        *browser,
 		Enrich:         !*noEnrich,
 		Reputation:     !*noEnrich && !*noReputation,
+		Cloud:          !*noCloud,
+		CloudTargets:   !*noCloudTargets,
 		Label:          !*noLabel,
 		TLS:            *tlsScan,
 		Keys:           keys,

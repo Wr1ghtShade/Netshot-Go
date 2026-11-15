@@ -64,7 +64,7 @@ func sortResults(results []Result) {
 }
 
 func writeReports(results []Result, exposures []*Exposure, tlsResults []TLSResult, outdir string,
-	inv []*TechEntry, visualGroups [][]int, takeovers []Takeover, reps []*Reputation) error {
+	inv []*TechEntry, visualGroups [][]int, takeovers []Takeover, reps []*Reputation, cloud *CloudReport) error {
 	sortResults(results) // already sorted when groups were computed: indexes stay valid
 	firsts := map[int]bool{}
 	for _, g := range visualGroups {
@@ -248,7 +248,7 @@ if(c)c.onchange=function(){document.body.classList.toggle('only',c.checked)};
 	page = strings.Replace(page, "{{TLSCSS}}", tlsCSS, 1)
 	page = strings.Replace(page, "{{TLS}}", tlsSection(tlsResults), 1)
 	page = strings.Replace(page, "{{WEBCSS}}", webCSS+filterCSS+reconCSS, 1)
-	page = strings.Replace(page, "{{TOP}}", reputationSection(reps)+takeoverSection(takeovers)+filesSection(results)+sensitiveSection(results)+
+	page = strings.Replace(page, "{{TOP}}", reputationSection(reps)+cloudSection(cloud)+takeoverSection(takeovers)+filesSection(results)+sensitiveSection(results)+
 		jsSection(results)+techSection(inv)+bannersSection(results)+wellKnownSection(results), 1)
 	page = strings.Replace(page, "{{BOTTOM}}", headersSection(results)+pageChecksSection(results)+groupsSection(results, visualGroups)+filterBar(results), 1)
 	page = strings.Replace(page, "{{FILTERJS}}", filterJS, 1)

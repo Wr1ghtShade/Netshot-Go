@@ -42,6 +42,8 @@ type Options struct {
 	Dirs           []string    // -dirs: folders to test for directory listings (nil = off)
 	Files          []FileRule  // -files: sensitive files to test (nil = off)
 	WAFProbe       bool        // -waf-probe: one request with a harmless attack-like string per web service
+	Cloud          bool        // cloud and SaaS footprint (cloud.go)
+	CloudTargets   bool        // add the domains and tenant pages found to the scan
 	CIP            CIPLimits   // Criminal IP lookups per scan (with the key "criminalip")
 	Proxy          *Proxy      // pages, favicons, folders and files go through it
 	Exclusions     *Exclusions // out-of-scope targets, never scanned
@@ -384,6 +386,26 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 			return nil, nil
 		}
 	}
+	var cloud *CloudReport
+	webOnly := map[string]bool{}
+	if opt.Cloud && ctx.Err() == nil {
+		var full, web []string
+		cloud, full, web = discoverCloud(ctx, hosts, logf)
+		if opt.CloudTargets {
+			added := append(append([]string{}, full...), web...)
+			if !opt.Exclusions.empty() {
+				added = opt.Exclusions.filter(added, logf)
+			}
+			for _, h := range added {
+				if containsStr(web, h) {
+					webOnly[h] = true
+				}
+				hosts = append(hosts, h)
+			}
+		} else {
+			cloud.Added = nil
+		}
+	}
 	var extra []string
 	if opt.Proxy != nil {
 		// Chromium never sends localhost through a proxy unless told so
@@ -415,7 +437,9 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 		port int
 	}
 	jobs := make(chan job)
-	total := len(hosts) * len(opt.Ports)
+	total := (len(hosts) - len(webOnly)) * len(opt.Ports)
+	webPorts := []int{443}
+	total += len(webOnly) * len(webPorts)
 	var done, found int64
 	var mu sync.Mutex
 	var results []Result
@@ -461,7 +485,11 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 
 feed:
 	for _, h := range hosts {
-		for _, p := range opt.Ports {
+		ports := opt.Ports
+		if webOnly[h] {
+			ports = webPorts
+		}
+		for _, p := range ports {
 			select {
 			case jobs <- job{h, p}:
 			case <-ctx.Done():
@@ -503,6 +531,18 @@ feed:
 	var inv []*TechEntry
 	var groups [][]int
 	var takeovers []Takeover
+	if opt.Cloud && !opt.Analyze && len(results) > 0 && ctx.Err() == nil {
+		// the footprint needs the dangling CNAMEs even without the page analysis
+		var names []string
+		for _, h := range hosts {
+			if net.ParseIP(strings.Trim(h, "[]")) == nil {
+				names = append(names, strings.ToLower(h))
+			}
+		}
+		if len(names) > 0 {
+			takeovers = checkTakeover(ctx, names, nil, logf)
+		}
+	}
 	if opt.Analyze && len(results) > 0 {
 		sortResults(results) // groups hold indexes: sort once, before grouping
 		groups = groupSimilar(results)
@@ -547,13 +587,19 @@ feed:
 			logf("[web] %v", err)
 		}
 	}
-	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers, reps); err != nil {
+	if opt.Cloud && ctx.Err() == nil {
+		finishCloud(ctx, cloud, results, exposures, takeovers, logf)
+		if err := writeCloudCSV(cloud, opt.Output); err != nil {
+			logf("[cloud] %v", err)
+		}
+	}
+	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers, reps, cloud); err != nil {
 		return results, err
 	}
-	if err := writeResultsJSON(opt.Output, results, exposures, tlsResults, inv, groups, takeovers, reps); err != nil {
+	if err := writeResultsJSON(opt.Output, results, exposures, tlsResults, inv, groups, takeovers, reps, cloud); err != nil {
 		logf("[export] results.json : %v", err)
 	}
-	if err := writeXLSX(filepath.Join(opt.Output, "results.xlsx"), buildSheets(results, exposures, inv, takeovers, reps)); err != nil {
+	if err := writeXLSX(filepath.Join(opt.Output, "results.xlsx"), buildSheets(results, exposures, inv, takeovers, reps, cloud)); err != nil {
 		logf("[export] results.xlsx : %v", err)
 	}
 	ok := 0
