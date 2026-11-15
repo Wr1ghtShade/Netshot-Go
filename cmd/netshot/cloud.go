@@ -70,7 +70,8 @@ type CloudReport struct {
 	Tenants  []CloudTenant  `json:"tenants,omitempty"`
 	Services []CloudService `json:"services,omitempty"`
 	IPs      []CloudIP      `json:"ips,omitempty"`
-	Added    []string       `json:"added,omitempty"` // hosts added to the scan ("host" or "host (443)")
+	Added    []string       `json:"added,omitempty"`       // hosts added to the scan ("host" or "host (443)")
+	Own      []string       `json:"org_domains,omitempty"` // registrable domains of the organisation (scanned + tenant)
 	Errors   []string       `json:"errors,omitempty"`
 }
 
@@ -800,6 +801,10 @@ func discoverCloud(ctx context.Context, hosts []string, logf func(string, ...any
 	if len(rep.Added) > 0 {
 		logf("[cloud] %d cible(s) ajoutée(s) au scan : %s", len(rep.Added), strings.Join(rep.Added, ", "))
 	}
+	for d := range own {
+		rep.Own = append(rep.Own, d)
+	}
+	sort.Strings(rep.Own)
 	return rep, full, web
 }
 

@@ -35,6 +35,8 @@ netshot-go/
 │   ├── reputation.go         réputation des noms : résolveurs filtrants, URLhaus, Criminal IP
 │   ├── criminalip.go         Criminal IP : analyse de domaine et score des IP (crédits plafonnés)
 │   ├── cloud.go              empreinte cloud et SaaS : tenant M365, SaaS, plages AWS / Azure / GCP
+│   ├── discover.go           certificats, crt.sh par organisation, blocs RDAP, UDP, IPv6, GitHub
+│   ├── risks.go              synthèse « Top risques » du rapport
 │   ├── settings.go           réglages de l'interface (thème) dans settings.json
 │   ├── window_*.go           ouverture maximisée de la fenêtre (Windows)
 │   ├── wordlist.go, subdomains.txt   dictionnaire de la force brute DNS
@@ -160,7 +162,10 @@ netshot.exe 10.0.0.0/24 -tls-scan                 # scan puis analyse TLS des se
 | `-no-enrich` | désactive l'enrichissement des IP, la recherche des CVE dans NVD et la réputation des noms | enrichissement actif |
 | `-no-reputation` | désactive seulement la réputation des noms | réputation active |
 | `-no-cloud` | désactive l'empreinte cloud et SaaS | empreinte active |
-| `-no-cloud-targets` | garde l'empreinte sans ajouter au scan les domaines et pages trouvés | ajout actif |
+| `-no-cloud-targets` | n'ajoute au scan aucun nom trouvé (cloud, certificats, crt.sh) | ajout actif |
+| `-no-pivot` | ne lit pas les certificats et ne cherche ni crt.sh par organisation ni les blocs d'IP | découverte active |
+| `-udp` | sondes UDP (DNS, NTP, SNMP, IKE, OpenVPN, SSDP) | inactif |
+| `-no-ipv6-parity` | ne compare pas les ports en IPv4 et en IPv6 | parité active |
 | `-criminalip-ips N` | IP publiques vérifiées par Criminal IP à chaque scan (clé `criminalip`) ; 0 = aucune | 5 |
 | `-criminalip-domains N` | domaines analysés par Criminal IP à chaque scan ; 0 = aucun | 1 |
 | `-no-analyze` | désactive l'analyse des pages (technologies, pages sensibles, en-têtes, favicon, pages similaires, JS, robots, bannières, takeover) | analyse active |
@@ -286,7 +291,7 @@ Saisie : bloc « Clés API » de l'interface, ou `-key source=CLÉ -save-keys`.
 Une variable `NETSHOT_KEY_<SOURCE>` (ex. `NETSHOT_KEY_DOMSCAN`) remplace la clé du fichier.
 
 Services acceptant une clé : certspotter, hackertarget, urlscan, virustotal, dnsdumpster, domscan,
-viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus), criminalip (Criminal IP).
+viewdns, leakix, shodan, leakcheck, nvd, abusech (URLhaus), criminalip (Criminal IP), github (recherche de code).
 
 Non inclus : SecurityTrails (plus de formule gratuite). ViewDNS passe uniquement par son API officielle
 (la page web est protégée par un contrôle anti-robot Cloudflare).
@@ -376,6 +381,30 @@ cloud et SaaS » de l'interface) la désactive. Les noms de buckets ou de compte
 
 Section « Empreinte cloud et SaaS » en tête du rapport, `cloud.csv`, onglet « Cloud et SaaS » de
 `results.xlsx`, clé `cloud` de `results.json`.
+
+### 🧭 Découverte élargie, UDP, IPv6, code public
+
+| Contrôle | Par défaut | Ce qui est fait |
+|---|---|---|
+| **Noms des certificats** | actif (`-no-pivot`) | le certificat servi sur le port 443 de chaque cible est lu ; ses noms (SAN) qui appartiennent aux domaines de l'organisation sont **ajoutés au scan** |
+| **crt.sh par organisation** | actif | le nom d'organisation (O=) des certificats OV / EV (hors CDN, hébergeurs, clouds) est cherché dans crt.sh : les domaines certifiés au même nom sont **ajoutés au scan** (25 au plus, ceux qui résolvent) |
+| **Blocs d'IP de l'organisation** | actif | RDAP des IP publiques trouvées : les blocs dont le nom ou le titulaire correspond à l'organisation sont **listés, jamais scannés** (à ajouter au périmètre si le client confirme), avec la ligne de cibles prête à copier |
+| **Services UDP** | inactif (`-udp`, test actif) | une requête par IP cible : DNS (**résolveur ouvert**), NTP, SNMP (découverte SNMPv3, **aucune communauté essayée**), IKE (VPN IPsec), OpenVPN, SSDP (UPnP). Impossible à travers un proxy |
+| **Parité IPv4 / IPv6** | actif (`-no-ipv6-parity`) | les ports scannés de chaque nom double pile sont essayés en IPv4 et en IPv6 : un port ouvert **seulement en IPv6** trahit un filtrage oublié. Sauté si le poste n'a pas d'accès IPv6 |
+| **Code public (GitHub)** | avec la clé `github` (jeton GitHub sans droit particulier) | recherche de code des domaines de l'organisation, seule et avec password / secret / token / apikey : dépôt, fichier et lien (les fichiers ne sont **pas téléchargés**) |
+
+Les ajouts au scan suivent les mêmes règles que l'empreinte cloud : seuls les noms qui résolvent,
+fichier d'exclusions appliqué, `-no-cloud-targets` pour ne rien ajouter. Sections du rapport,
+`discovery.csv`, onglet « Découverte » de `results.xlsx`, clé `discovery` de `results.json`.
+
+### 🎯 Top risques
+
+En tête du rapport, les constats de tous les contrôles classés par gravité (10 premiers, constats
+identiques regroupés) : vulnérabilités **CISA KEV** et à fort score EPSS, fuites LeakIX, fichiers
+sensibles critiques ou élevés, secrets dans le JavaScript, pages de débogage et interfaces
+d'administration, TLS noté F ou T, prise de contrôle de sous-domaine, réputation critique ou haute,
+services UDP risqués, ports ouverts en IPv6 seulement, code public citant un secret. Aussi dans la
+clé `risks` de `results.json`.
 
 ## 🔬 Analyse des pages
 

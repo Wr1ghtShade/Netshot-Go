@@ -44,8 +44,8 @@ func TestPagesAndPorts(t *testing.T) {
 	if err != nil || len(ports) < 110 {
 		t.Errorf("presets: %d ports, %v", len(ports), err)
 	}
-	if n := len(fileRules(nil)); n != 65 {
-		t.Errorf("files.txt: %d rules compiled, want 65 (a signature RE2 cannot read?)", n)
+	if n := len(fileRules(nil)); n != 71 {
+		t.Errorf("files.txt: %d rules compiled, want 71 (a signature RE2 cannot read?)", n)
 	}
 	if n := len(dirWords(nil)); n != 95 {
 		t.Errorf("dirs.txt: %d folders, want 95", n)

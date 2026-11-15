@@ -57,6 +57,9 @@ type startRequest struct {
 	Enrich         bool     `json:"enrich"`
 	Reputation     bool     `json:"reputation"`
 	Cloud          *bool    `json:"cloud"` // nil = on
+	Pivot          *bool    `json:"pivot"` // nil = on
+	UDP            bool     `json:"udp"`
+	IPv6Parity     *bool    `json:"ipv6_parity"` // nil = on
 	TLS            bool     `json:"tls"`
 	Label          bool     `json:"label"`
 	Dirs           bool     `json:"dirs"`
@@ -448,6 +451,9 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		Reputation:     req.Reputation,
 		Cloud:          req.Cloud == nil || *req.Cloud,
 		CloudTargets:   true,
+		Pivot:          req.Pivot == nil || *req.Pivot,
+		UDP:            req.UDP,
+		IPv6Parity:     req.IPv6Parity == nil || *req.IPv6Parity,
 		Label:          req.Label,
 		TLS:            req.TLS,
 		Keys:           loadKeys(),

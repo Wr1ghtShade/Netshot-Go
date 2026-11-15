@@ -72,6 +72,9 @@ func main() {
 	noLabel := fs.Bool("no-label", false, "do not write host:port, URL, status and date at the bottom of the screenshots")
 	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the CVEs of the versions found (NVD) nor check the reputation of the host names (block lists, URLhaus)")
 	noCloud := fs.Bool("no-cloud", false, "do not look for the cloud and SaaS footprint of the domains (Microsoft 365 tenant, SaaS, AWS / Azure / GCP / Cloudflare IPs)")
+	noPivot := fs.Bool("no-pivot", false, "do not read the certificate names of the targets nor search crt.sh and RDAP for the organisation")
+	udpFlag := fs.Bool("udp", false, "probe DNS, NTP, SNMP (v3 discovery), IKE, OpenVPN and SSDP over UDP on every target IP (active)")
+	noIPv6 := fs.Bool("no-ipv6-parity", false, "do not compare the scanned ports of the dual-stack names on IPv4 and IPv6")
 	noCloudTargets := fs.Bool("no-cloud-targets", false, "keep the cloud footprint but do not add the domains and tenant pages found to the scan")
 	noReputation := fs.Bool("no-reputation", false, "do not check the reputation of the host names (block lists, URLhaus, Criminal IP); -no-enrich turns it off too")
 	cipIPs := fs.Int("criminalip-ips", defaultCIPIPs, "with the key criminalip: public IPs looked up per scan (free account: 50 per month); 0 = none")
@@ -257,6 +260,9 @@ func main() {
 		Reputation:     !*noEnrich && !*noReputation,
 		Cloud:          !*noCloud,
 		CloudTargets:   !*noCloudTargets,
+		Pivot:          !*noPivot,
+		UDP:            *udpFlag,
+		IPv6Parity:     !*noIPv6,
 		Label:          !*noLabel,
 		TLS:            *tlsScan,
 		Keys:           keys,

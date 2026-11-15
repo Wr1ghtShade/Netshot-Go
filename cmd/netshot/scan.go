@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -43,6 +44,9 @@ type Options struct {
 	Files          []FileRule  // -files: sensitive files to test (nil = off)
 	WAFProbe       bool        // -waf-probe: one request with a harmless attack-like string per web service
 	Cloud          bool        // cloud and SaaS footprint (cloud.go)
+	Pivot          bool        // certificate names, crt.sh by organisation, RDAP netblocks (discover.go)
+	UDP            bool        // -udp: DNS, NTP, SNMP, IKE, OpenVPN, SSDP probes
+	IPv6Parity     bool        // scanned ports of the dual-stack names on IPv4 and IPv6
 	CloudTargets   bool        // add the domains and tenant pages found to the scan
 	CIP            CIPLimits   // Criminal IP lookups per scan (with the key "criminalip")
 	Proxy          *Proxy      // pages, favicons, folders and files go through it
@@ -406,6 +410,43 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 			cloud.Added = nil
 		}
 	}
+	ext := &Extra{}
+	var ownDomains []string
+	if cloud != nil && len(cloud.Own) > 0 {
+		ownDomains = cloud.Own
+	} else {
+		ownDomains = cloudDomains(hosts)
+	}
+	if opt.Pivot && ctx.Err() == nil {
+		own := map[string]bool{}
+		for _, d := range ownDomains {
+			own[d] = true
+		}
+		added := certPivot(ctx, opt.Proxy, hosts, own, ext, logf)
+		known := map[string]bool{}
+		for _, h := range append(append([]string{}, hosts...), added...) {
+			known[strings.ToLower(h)] = true
+		}
+		added = append(added, orgPivot(ctx, own, known, ext, logf)...)
+		ownDomains = ownDomains[:0:0]
+		for d := range own {
+			ownDomains = append(ownDomains, d)
+		}
+		sort.Strings(ownDomains)
+		if opt.CloudTargets {
+			if !opt.Exclusions.empty() && len(added) > 0 {
+				added = opt.Exclusions.filter(added, logf)
+			}
+			hosts = append(hosts, added...)
+		} else {
+			for i := range ext.CertNames {
+				ext.CertNames[i].Added = false
+			}
+			for i := range ext.OrgDomains {
+				ext.OrgDomains[i].Added = false
+			}
+		}
+	}
 	var extra []string
 	if opt.Proxy != nil {
 		// Chromium never sends localhost through a proxy unless told so
@@ -599,13 +640,14 @@ feed:
 			logf("[cloud] %v", err)
 		}
 	}
-	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers, reps, cloud); err != nil {
+	runExtraChecks(ctx, opt, hosts, ownDomains, results, exposures, cloud, ext, logf)
+	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers, reps, cloud, ext); err != nil {
 		return results, err
 	}
-	if err := writeResultsJSON(opt.Output, results, exposures, tlsResults, inv, groups, takeovers, reps, cloud); err != nil {
+	if err := writeResultsJSON(opt.Output, results, exposures, tlsResults, inv, groups, takeovers, reps, cloud, ext); err != nil {
 		logf("[export] results.json : %v", err)
 	}
-	if err := writeXLSX(filepath.Join(opt.Output, "results.xlsx"), buildSheets(results, exposures, inv, takeovers, reps, cloud)); err != nil {
+	if err := writeXLSX(filepath.Join(opt.Output, "results.xlsx"), buildSheets(results, exposures, inv, takeovers, reps, cloud, ext)); err != nil {
 		logf("[export] results.xlsx : %v", err)
 	}
 	ok := 0
