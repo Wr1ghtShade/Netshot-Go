@@ -243,13 +243,31 @@ func orgPivot(ctx context.Context, own map[string]bool, known map[string]bool, e
 			logf("[pivot] crt.sh O=%s : %v", o, err)
 			continue
 		}
-		n := 0
+		// a large organisation can have thousands of certified domains: 100 examined at most,
+		// resolved in parallel, and only those 100 listed in the report
+		var fresh []string
 		for _, d := range domains {
-			if own[d] || known[d] {
-				continue
+			if !own[d] && !known[d] && len(fresh) < 100 {
+				fresh = append(fresh, d)
 			}
+		}
+		alive := make([]bool, len(fresh))
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, 16)
+		for i, d := range fresh {
+			wg.Add(1)
+			go func(i int, d string) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+				alive[i] = ctx.Err() == nil && resolves(ctx, d)
+			}(i, d)
+		}
+		wg.Wait()
+		n := 0
+		for i, d := range fresh {
 			pn := PivotName{Name: d, Via: "crt.sh O=" + o}
-			if n < 25 && resolves(ctx, d) {
+			if alive[i] && n < 25 {
 				pn.Added = true
 				add = append(add, d)
 				known[d] = true
@@ -258,7 +276,11 @@ func orgPivot(ctx context.Context, own map[string]bool, known map[string]bool, e
 			}
 			ext.OrgDomains = append(ext.OrgDomains, pn)
 		}
-		logf("[pivot] crt.sh O=%s : %d autre(s) domaine(s), %d ajouté(s) au scan", o, len(domains), n)
+		more := ""
+		if len(domains) > len(fresh) {
+			more = fmt.Sprintf(" (%d déjà connus ou au-delà des 100 examinés)", len(domains)-len(fresh))
+		}
+		logf("[pivot] crt.sh O=%s : %d domaine(s)%s, %d ajouté(s) au scan", o, len(domains), more, n)
 	}
 	return add
 }

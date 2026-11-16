@@ -3,6 +3,20 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Python a son
 propre journal dans le dépôt [Netshot](https://github.com/Wr1ghtShade/Netshot).
 
+## [1.2.11] - 2026-11-16
+
+### Corrigé
+- **crt.sh par organisation** : une grande organisation peut avoir des milliers de domaines
+  certifiés ; ils étaient tous résolus un par un avant le scan (plusieurs minutes) et listés dans
+  le rapport. 100 domaines nouveaux au plus sont maintenant examinés, résolus en parallèle
+  (16 à la fois) et listés ; le journal indique combien ont été laissés de côté.
+
+Les autres corrections de cette version (défilement de la colonne d'options, hauteur du journal,
+bouton « Arrêter ») concernent l'interface Python ; l'interface Go défilait déjà et s'arrêtait
+déjà avec l'annulation du scan.
+
+Fichiers : `discover.go`, CHANGELOG.
+
 ## [1.2.10] - 2026-11-15
 
 ### Ajouté
