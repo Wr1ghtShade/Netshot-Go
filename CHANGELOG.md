@@ -3,6 +3,12 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Python a son
 propre journal dans le dépôt [Netshot](https://github.com/Wr1ghtShade/Netshot).
 
+## [1.2.12] - 2026-11-16
+
+Aucune modification côté Go : version alignée sur NetShot Python (boutons d'user agent plus
+compacts et journal plus haut dans l'interface tkinter ; ceux de l'interface Go sont déjà des
+pastilles compactes).
+
 ## [1.2.11] - 2026-11-16
 
 ### Corrigé
