@@ -45,3 +45,12 @@ func TestStealth(t *testing.T) {
 		t.Errorf("logs %v", logs)
 	}
 }
+
+func TestDNSServerValue(t *testing.T) {
+	for in, want := range map[string]string{"": "", "Système (résolveurs de la machine)": "", "1.1.1.1": "1.1.1.1",
+		"2606:4700:4700::1111 (Cloudflare IPv6)": "2606:4700:4700::1111", " 10.0.0.1:5353 ": "10.0.0.1:5353"} {
+		if got := dnsServerValue(in); got != want {
+			t.Errorf("%q -> %q, want %q", in, got, want)
+		}
+	}
+}

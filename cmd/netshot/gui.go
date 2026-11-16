@@ -580,10 +580,7 @@ func (s *guiServer) handleDNS(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"error": "Indique un domaine."})
 		return
 	}
-	server := strings.TrimSpace(req.Server)
-	if strings.EqualFold(server, "système") || strings.EqualFold(server, "systeme") {
-		server = ""
-	}
+	server := dnsServerValue(req.Server)
 	rep := dnsLookup(r.Context(), req.Domain, server)
 	writeJSON(w, map[string]any{"report": rep, "dig": formatDig(rep), "hosts": dnsHosts(rep.Records)})
 }
@@ -791,4 +788,14 @@ func intOr(p *int, def, lo, hi int) int {
 		return def
 	}
 	return clampInt(*p, lo, hi)
+}
+
+// dnsServerValue: "1.1.1.1 (Cloudflare)" -> "1.1.1.1"; "Système…" or empty -> "" (system resolvers).
+func dnsServerValue(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.HasPrefix(strings.ToLower(s), "syst") {
+		return ""
+	}
+	before, _, _ := strings.Cut(s, " (")
+	return strings.TrimSpace(before)
 }

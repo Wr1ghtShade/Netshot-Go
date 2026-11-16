@@ -454,10 +454,35 @@ table.leaks td { white-space: nowrap; }
           <label for="dns-domain">Domaine</label>
           <input type="text" id="dns-domain" class="grow" placeholder="exemple.fr">
           <label for="dns-server">Serveur</label>
-          <input type="text" id="dns-server" style="width:180px" placeholder="système (ou 1.1.1.1, 10.0.0.1)">
+          <input type="text" id="dns-server" style="width:230px" value="1.1.1.1" list="dns-servers" placeholder="vide = résolveurs du système">
+          <datalist id="dns-servers">
+            <option value="">Système (résolveurs de la machine)</option>
+            <option value="1.1.1.1">Cloudflare</option>
+            <option value="1.0.0.1">Cloudflare</option>
+            <option value="2606:4700:4700::1111">Cloudflare IPv6</option>
+            <option value="2606:4700:4700::1001">Cloudflare IPv6</option>
+            <option value="8.8.8.8">Google</option>
+            <option value="8.8.4.4">Google</option>
+            <option value="2001:4860:4860::8888">Google IPv6</option>
+            <option value="2001:4860:4860::8844">Google IPv6</option>
+            <option value="9.9.9.9">Quad9, filtrant</option>
+            <option value="149.112.112.112">Quad9, filtrant</option>
+            <option value="2620:fe::fe">Quad9 IPv6, filtrant</option>
+            <option value="9.9.9.10">Quad9 sans filtrage</option>
+            <option value="2620:fe::10">Quad9 IPv6 sans filtrage</option>
+            <option value="208.67.222.222">OpenDNS</option>
+            <option value="208.67.220.220">OpenDNS</option>
+            <option value="2620:119:35::35">OpenDNS IPv6</option>
+            <option value="94.140.14.140">AdGuard sans filtrage</option>
+            <option value="2a10:50c0::1:ff">AdGuard IPv6 sans filtrage</option>
+            <option value="80.67.169.12">FDN</option>
+            <option value="2001:910:800::12">FDN IPv6</option>
+            <option value="194.242.2.2">Mullvad</option>
+            <option value="2a07:e340::2">Mullvad IPv6</option>
+          </datalist>
           <button id="dns-run" class="primary">Interroger</button>
         </div>
-        <p class="hint">Une requête ANY est tentée, mais la plupart des serveurs la refusent (RFC 8482) : chaque type est donc aussi interrogé un par un (A, AAAA, NS, SOA, MX, TXT, CAA, DS, DNSKEY, HTTPS, DMARC, MTA-STS, SRV Active Directory et Microsoft 365…).</p>
+        <p class="hint">Serveur : 1.1.1.1 par défaut ; la liste propose les résolveurs publics connus en IPv4 et IPv6 (les « filtrants » bloquent les domaines malveillants et peuvent masquer une réponse) ; vide = résolveurs du système ; toute adresse peut être saisie (10.0.0.1, [2001:db8::1]:5353). Une requête ANY est tentée, mais la plupart des serveurs la refusent (RFC 8482) : chaque type est donc aussi interrogé un par un (A, AAAA, NS, SOA, MX, TXT, CAA, DS, DNSKEY, HTTPS, DMARC, MTA-STS, SRV Active Directory et Microsoft 365…).</p>
         <div class="result" id="dns-result" hidden>
           <h3 id="dns-title"></h3>
           <div class="hint" id="dns-any"></div>
