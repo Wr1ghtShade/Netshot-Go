@@ -72,6 +72,8 @@ func main() {
 	noLabel := fs.Bool("no-label", false, "do not write host:port, URL, status and date at the bottom of the screenshots")
 	noEnrich := fs.Bool("no-enrich", false, "do not enrich the IPs found (Shodan InternetDB, LeakIX, CISA KEV, EPSS), look up the CVEs of the versions found (NVD) nor check the reputation of the host names (block lists, URLhaus)")
 	noCloud := fs.Bool("no-cloud", false, "do not look for the cloud and SaaS footprint of the domains (Microsoft 365 tenant, SaaS, AWS / Azure / GCP / Cloudflare IPs)")
+	stealth := fs.Bool("stealth", false, "stealth mode: one check at a time, random pause before each connection, random order, browser User-Agent; no folders, files, WAF probe, UDP, TLS analysis, IPv6 parity nor certificate pivot")
+	stealthDelay := fs.String("stealth-delay", "3-8", "stealth mode: random pause before each TCP connection, in seconds (min-max)")
 	noPivot := fs.Bool("no-pivot", false, "do not read the certificate names of the targets nor search crt.sh and RDAP for the organisation")
 	udpFlag := fs.Bool("udp", false, "probe DNS, NTP, SNMP (v3 discovery), IKE, OpenVPN and SSDP over UDP on every target IP (active)")
 	noIPv6 := fs.Bool("no-ipv6-parity", false, "do not compare the scanned ports of the dual-stack names on IPv4 and IPv6")
@@ -263,6 +265,7 @@ func main() {
 		Pivot:          !*noPivot,
 		UDP:            *udpFlag,
 		IPv6Parity:     !*noIPv6,
+		Stealth:        *stealth,
 		Label:          !*noLabel,
 		TLS:            *tlsScan,
 		Keys:           keys,
@@ -290,6 +293,8 @@ func main() {
 		opt.Files = fileRules(custom)
 		fmt.Fprintf(os.Stderr, "-files: %d files per web service\n", len(opt.Files))
 	}
+	opt.StealthDelay, err = parseStealthDelay(*stealthDelay)
+	exitOnErr(err)
 	opt.Proxy, err = parseProxy(*proxyFlag)
 	exitOnErr(err)
 	opt.Exclusions, err = readExclusions(excludeFlags, excludeFiles)

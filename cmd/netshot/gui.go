@@ -59,6 +59,8 @@ type startRequest struct {
 	Cloud          *bool    `json:"cloud"` // nil = on
 	Pivot          *bool    `json:"pivot"` // nil = on
 	UDP            bool     `json:"udp"`
+	Stealth        bool     `json:"stealth"`
+	StealthDelay   string   `json:"stealth_delay"`
 	IPv6Parity     *bool    `json:"ipv6_parity"` // nil = on
 	TLS            bool     `json:"tls"`
 	Label          bool     `json:"label"`
@@ -461,6 +463,7 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		CloudTargets:   true,
 		Pivot:          req.Pivot == nil || *req.Pivot,
 		UDP:            req.UDP,
+		Stealth:        req.Stealth,
 		IPv6Parity:     req.IPv6Parity == nil || *req.IPv6Parity,
 		Label:          req.Label,
 		TLS:            req.TLS,
@@ -480,9 +483,18 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		return nil, Options{}, "", fmt.Errorf("Proxy invalide : %v", err)
 	}
 	opt.Proxy = proxy
+	if opt.StealthDelay, err = parseStealthDelay(req.StealthDelay); err != nil {
+		return nil, Options{}, "", err
+	}
 	opt.Exclusions = newExclusions(strings.Fields(strings.NewReplacer(",", " ", "\n", " ", "\r", " ").Replace(req.Exclude)))
 	confirm := ""
-	if tests := len(hosts) * len(ports); tests > 5000 {
+	if opt.Stealth {
+		d := stealthEstimate(len(hosts)*len(ports), opt.StealthDelay)
+		if d > 2*time.Hour {
+			confirm = fmt.Sprintf("Mode furtif : %d hôtes x %d ports = environ %s rien que pour les tests de ports.\nContinuer ?",
+				len(hosts), len(ports), fmtDuration(d))
+		}
+	} else if tests := len(hosts) * len(ports); tests > 5000 {
 		confirm = fmt.Sprintf("%d hôtes x %d ports = %d tests (x %d UA pour les services trouvés).\nContinuer ?",
 			len(hosts), len(ports), tests, len(uas))
 	}

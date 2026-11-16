@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
@@ -39,18 +40,20 @@ type Options struct {
 	TLS            bool   // analyze the certificates and TLS setup of the https services found
 	Label          bool   // write host:port, URL, status and date at the bottom of each capture
 	Keys           Keys
-	Analyze        bool        // technologies, sensitive pages, headers, favicon, JS, robots, banners, takeover
-	Dirs           []string    // -dirs: folders to test for directory listings (nil = off)
-	Files          []FileRule  // -files: sensitive files to test (nil = off)
-	WAFProbe       bool        // -waf-probe: one request with a harmless attack-like string per web service
-	Cloud          bool        // cloud and SaaS footprint (cloud.go)
-	Pivot          bool        // certificate names, crt.sh by organisation, RDAP netblocks (discover.go)
-	UDP            bool        // -udp: DNS, NTP, SNMP, IKE, OpenVPN, SSDP probes
-	IPv6Parity     bool        // scanned ports of the dual-stack names on IPv4 and IPv6
-	CloudTargets   bool        // add the domains and tenant pages found to the scan
-	CIP            CIPLimits   // Criminal IP lookups per scan (with the key "criminalip")
-	Proxy          *Proxy      // pages, favicons, folders and files go through it
-	Exclusions     *Exclusions // out-of-scope targets, never scanned
+	Analyze        bool         // technologies, sensitive pages, headers, favicon, JS, robots, banners, takeover
+	Dirs           []string     // -dirs: folders to test for directory listings (nil = off)
+	Files          []FileRule   // -files: sensitive files to test (nil = off)
+	WAFProbe       bool         // -waf-probe: one request with a harmless attack-like string per web service
+	Cloud          bool         // cloud and SaaS footprint (cloud.go)
+	Pivot          bool         // certificate names, crt.sh by organisation, RDAP netblocks (discover.go)
+	UDP            bool         // -udp: DNS, NTP, SNMP, IKE, OpenVPN, SSDP probes
+	IPv6Parity     bool         // scanned ports of the dual-stack names on IPv4 and IPv6
+	CloudTargets   bool         // add the domains and tenant pages found to the scan
+	CIP            CIPLimits    // Criminal IP lookups per scan (with the key "criminalip")
+	Proxy          *Proxy       // pages, favicons, folders and files go through it
+	Exclusions     *Exclusions  // out-of-scope targets, never scanned
+	Stealth        bool         // -stealth: see stealth.go
+	StealthDelay   StealthDelay // random pause before each TCP connection in stealth mode
 }
 
 type Result struct {
@@ -376,6 +379,9 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 			cb.Log(fmt.Sprintf(format, a...))
 		}
 	}
+	if opt.Stealth {
+		applyStealth(&opt, logf)
+	}
 	if len(opt.UAs) == 0 {
 		opt.UAs = []UA{{Name: "default"}}
 	}
@@ -422,7 +428,10 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 		for _, d := range ownDomains {
 			own[d] = true
 		}
-		added := certPivot(ctx, opt.Proxy, hosts, own, ext, logf)
+		var added []string
+		if !opt.Stealth { // stealth: no extra handshake on the targets
+			added = certPivot(ctx, opt.Proxy, hosts, own, ext, logf)
+		}
 		known := map[string]bool{}
 		for _, h := range append(append([]string{}, hosts...), added...) {
 			known[strings.ToLower(h)] = true
@@ -495,6 +504,12 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 
 	worker := func() {
 		for j := range jobs {
+			if opt.Stealth && ctx.Err() == nil {
+				select {
+				case <-time.After(opt.StealthDelay.pick()):
+				case <-ctx.Done():
+				}
+			}
 			if ctx.Err() == nil && isOpen(ctx, opt, j.host, j.port) {
 				o := opt
 				if webOnly[j.host] {
@@ -530,18 +545,27 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 		}
 	}()
 
-feed:
+	var all []job
 	for _, h := range hosts {
 		ports := opt.Ports
 		if webOnly[h] {
 			ports = webPorts
 		}
 		for _, p := range ports {
-			select {
-			case jobs <- job{h, p}:
-			case <-ctx.Done():
-				break feed
-			}
+			all = append(all, job{h, p})
+		}
+	}
+	if opt.Stealth {
+		rand.Shuffle(len(all), func(i, j int) { all[i], all[j] = all[j], all[i] })
+		logf("[furtif] %d vérification(s) : environ %s pour les seuls tests de ports", len(all),
+			fmtDuration(stealthEstimate(len(all), opt.StealthDelay)))
+	}
+feed:
+	for _, j := range all {
+		select {
+		case jobs <- j:
+		case <-ctx.Done():
+			break feed
 		}
 	}
 	close(jobs)
