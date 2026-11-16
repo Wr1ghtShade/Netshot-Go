@@ -1098,7 +1098,8 @@ $("file").onchange = async () => {
 function setRunning(running) {
   $("start").disabled = running;
   $("stop").disabled = !running;
-  if (running) { $("open-folder").disabled = true; $("open-report").disabled = true; }
+  // the scan folder exists from the start: it can be opened while the captures arrive
+  if (running) { $("open-folder").disabled = false; $("open-report").disabled = true; }
 }
 
 async function start(confirmed) {
@@ -1183,7 +1184,7 @@ events.onmessage = ev => {
     } else {
       $("status").textContent = (data.stopped ? "Arrêté. " : "Terminé. ") + $("status").textContent;
     }
-    $("open-folder").disabled = !data.report;
+    $("open-folder").disabled = false;
     $("open-report").disabled = !data.report;
   }
 };

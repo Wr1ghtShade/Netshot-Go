@@ -143,10 +143,17 @@ func openWindow(browser, url string) {
 }
 
 func openPath(p string) {
+	if abs, err := filepath.Abs(p); err == nil {
+		p = abs // a relative output folder ("netshot_output") would be resolved by the wrong process
+	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", p)
+		if st, err := os.Stat(p); err == nil && st.IsDir() {
+			cmd = exec.Command("explorer", p) // folders: Explorer (FileProtocolHandler may ignore them)
+		} else {
+			cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", p)
+		}
 	case "darwin":
 		cmd = exec.Command("open", p)
 	default:
@@ -302,6 +309,7 @@ func (s *guiServer) handleStart(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel, s.running, s.outdir = cancel, true, opt.Output
+	_ = os.MkdirAll(opt.Output, 0o755) // the folder can be opened while the captures arrive
 	s.mu.Unlock()
 
 	go func() {

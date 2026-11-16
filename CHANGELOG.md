@@ -3,6 +3,17 @@
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). La version Python a son
 propre journal dans le dépôt [Netshot](https://github.com/Wr1ghtShade/Netshot).
 
+## [1.2.15] - 2026-11-16
+
+### Corrigé
+- **« Ouvrir le dossier » grisé pendant le scan** : le dossier du scan est créé dès le lancement et
+  le bouton est actif tout de suite, pour regarder les captures au fur et à mesure. Il reste actif
+  après un scan arrêté. « Ouvrir le rapport » s'active à la fin, quand le rapport est écrit.
+- Sous Windows, un dossier est ouvert avec l'Explorateur (au lieu de `url.dll,FileProtocolHandler`,
+  qui ignore parfois les dossiers), et tout chemin est rendu absolu avant d'être ouvert.
+
+Fichiers : `gui.go`, `gui.html`, CHANGELOG.
+
 ## [1.2.14] - 2026-11-16
 
 ### Corrigé
