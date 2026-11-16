@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCloudSignatures(t *testing.T) {
@@ -146,5 +147,34 @@ func TestFinishCloud(t *testing.T) {
 	}
 	if rows := cloudRows(rep); len(rows) != 2 {
 		t.Errorf("rows %v", rows)
+	}
+}
+
+func TestDiscoverCloudBudget(t *testing.T) {
+	// a Microsoft endpoint that never answers must not hold the scan longer than the budget
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			defer c.Close() // hold the connection open, never answer
+		}
+	}()
+	oldL, oldA, oldB := msLogin, msAutodiscover, cloudBudget
+	msLogin, msAutodiscover, cloudBudget = "http://"+ln.Addr().String(), "http://"+ln.Addr().String(), 2*time.Second
+	defer func() { msLogin, msAutodiscover, cloudBudget = oldL, oldA, oldB }()
+	start := time.Now()
+	rep, _, _ := discoverCloud(context.Background(), []string{"www.exemple.invalid.fr"}, t.Logf)
+	if d := time.Since(start); d > 6*time.Second {
+		t.Errorf("discovery took %s", d)
+	}
+	if len(rep.Errors) == 0 {
+		t.Errorf("expected a timeout note: %+v", rep)
 	}
 }

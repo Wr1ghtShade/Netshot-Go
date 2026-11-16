@@ -330,7 +330,10 @@ func recordServices(domain string, recs []DNSRecord) []CloudService {
 
 // --- Microsoft 365 / Entra ID ------------------------------------------------------------------
 
-var cloudClient = &http.Client{Timeout: 15 * time.Second}
+var cloudClient = &http.Client{Timeout: 10 * time.Second}
+
+// cloudBudget: time given to the tenant and DNS lookups before the scan.
+var cloudBudget = 60 * time.Second
 
 var (
 	msLogin        = "https://login.microsoftonline.com"
@@ -731,16 +734,77 @@ func discoverCloud(ctx context.Context, hosts []string, logf func(string, ...any
 			rep.Services = append(rep.Services, s)
 		}
 	}
-	for _, d := range rep.Domains {
-		if ctx.Err() != nil {
-			break
+	// every domain in parallel, within a time budget: a filtered network (DNS or Microsoft
+	// unreachable, proxy) must not hold the scan for minutes
+	type probe struct {
+		services []CloudService
+		tenant   *CloudTenant
+		err      error
+	}
+	bctx, cancel := context.WithTimeout(ctx, cloudBudget)
+	defer cancel()
+	results := make([]chan probe, len(rep.Domains))
+	for i, d := range rep.Domains {
+		results[i] = make(chan probe, 1)
+		go func(d string, out chan<- probe) {
+			var mu sync.Mutex
+			var wg sync.WaitGroup
+			var recs []DNSRecord
+			var services []CloudService
+			for _, t := range []uint16{15, 16, 2} { // MX, TXT, NS
+				wg.Add(1)
+				go func(t uint16) {
+					defer wg.Done()
+					r := dnsRecords(bctx, servers, d, t)
+					mu.Lock()
+					recs = append(recs, r...)
+					mu.Unlock()
+				}(t)
+			}
+			for _, p := range cloudProbeNames {
+				wg.Add(1)
+				go func(name string) {
+					defer wg.Done()
+					chain, _ := cnameChain(bctx, name, servers)
+					for _, c := range chain {
+						if s, ok := matchSig("CNAME", c); ok {
+							mu.Lock()
+							services = append(services, CloudService{s.service, s.category, "CNAME", name, strings.TrimSuffix(c, ".")})
+							mu.Unlock()
+							break
+						}
+					}
+				}(p + "." + d)
+			}
+			var t *CloudTenant
+			var terr error
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				t, terr = microsoftTenant(bctx, d)
+			}()
+			wg.Wait()
+			out <- probe{append(recordServices(d, recs), services...), t, terr}
+		}(d, results[i])
+	}
+	var late []string
+	for i, d := range rep.Domains {
+		var p probe
+		select {
+		case p = <-results[i]:
+		case <-bctx.Done():
+			late = append(late, d)
+			continue
 		}
-		var recs []DNSRecord
-		for _, t := range []uint16{15, 16, 2} { // MX, TXT, NS
-			recs = append(recs, dnsRecords(ctx, servers, d, t)...)
+		if bctx.Err() != nil && p.tenant == nil && len(p.services) == 0 {
+			late = append(late, d)
+			continue
+		}
+		if p.err != nil {
+			rep.Errors = append(rep.Errors, d+" : "+p.err.Error())
 		}
 		google := false
-		for _, s := range recordServices(d, recs) {
+		for _, s := range p.services {
 			addService(s)
 			if s.Service == "Google Workspace" && s.Source == "MX" {
 				google = true
@@ -749,32 +813,28 @@ func discoverCloud(ctx context.Context, hosts []string, logf func(string, ...any
 		if google {
 			rep.Tenants = append(rep.Tenants, CloudTenant{Provider: "Google Workspace", Domain: d, Auth: "messagerie Google (MX)"})
 		}
-		for _, p := range cloudProbeNames {
-			name := p + "." + d
-			chain, _ := cnameChain(ctx, name, servers)
-			for _, c := range chain {
-				if s, ok := matchSig("CNAME", c); ok {
-					addService(CloudService{s.service, s.category, "CNAME", name, strings.TrimSuffix(c, ".")})
-					break
+		msg := fmt.Sprintf("[cloud] %s : %d service(s) reconnu(s)", d, len(p.services))
+		if t := p.tenant; t != nil {
+			rep.Tenants = append(rep.Tenants, *t)
+			msg += fmt.Sprintf(", tenant Microsoft %s, authentification %s", orDash(t.TenantID), orDash(t.Auth))
+			if t.IdP != "" {
+				msg += ", fournisseur d'identité " + t.IdP
+			}
+			for _, td := range t.Domains {
+				if !strings.HasSuffix(td, ".onmicrosoft.com") {
+					own[registrableDomain(td)] = true
 				}
 			}
 		}
-		t, err := microsoftTenant(ctx, d)
-		if err != nil {
-			rep.Errors = append(rep.Errors, d+" : "+err.Error())
-			continue
+		logf("%s", msg)
+	}
+	if len(late) > 0 {
+		why := fmt.Sprintf("pas de réponse en %d s (réseau filtré ?)", int(cloudBudget.Seconds()))
+		if ctx.Err() != nil {
+			why = "arrêt demandé"
 		}
-		if t == nil {
-			continue
-		}
-		rep.Tenants = append(rep.Tenants, *t)
-		logf("[cloud] %s : tenant Microsoft %s, authentification %s%s", d, orDash(t.TenantID), orDash(t.Auth),
-			map[bool]string{true: ", fournisseur d'identité " + t.IdP, false: ""}[t.IdP != ""])
-		for _, td := range t.Domains {
-			if !strings.HasSuffix(td, ".onmicrosoft.com") {
-				own[registrableDomain(td)] = true
-			}
-		}
+		logf("[cloud] %s : %s, empreinte incomplète", strings.Join(late, ", "), why)
+		rep.Errors = append(rep.Errors, strings.Join(late, ", ")+" : "+why)
 	}
 	// hosts to add: domains of the tenants, federation host, SaaS tenant pages
 	for _, t := range rep.Tenants {
