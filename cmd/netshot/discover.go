@@ -36,9 +36,10 @@ import (
 )
 
 type PivotName struct {
-	Name  string `json:"name"`
-	Via   string `json:"via"`   // "certificat de host:443" or "crt.sh O=…"
-	Added bool   `json:"added"` // added to the scan
+	Name      string `json:"name"`
+	Via       string `json:"via"`                 // "certificat de host:443" or "crt.sh O=…"
+	Added     bool   `json:"added"`               // added to the scan
+	Candidate bool   `json:"candidate,omitempty"` // would have been added with -add-discovered
 }
 
 type Netblock struct {
@@ -753,6 +754,8 @@ func addedMark(p PivotName) string {
 	switch {
 	case p.Added:
 		return "ajouté au scan"
+	case p.Candidate:
+		return "découvert, non scanné : à ajouter aux cibles s'il est dans le périmètre"
 	case strings.HasPrefix(p.Via, "crt.sh"):
 		return "non scanné : à ajouter aux cibles s'il est dans le périmètre"
 	}
@@ -783,6 +786,15 @@ func extraSections(e *Extra) string {
 				fmt.Fprintf(&sb, `<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, esc(p.Name), esc(p.Via), addedMark(p))
 			}
 			sb.WriteString(`</table>`)
+			var todo []string
+			for _, p := range list {
+				if p.Candidate || (!p.Added && strings.HasPrefix(p.Via, "crt.sh")) {
+					todo = append(todo, p.Name)
+				}
+			}
+			if len(todo) > 0 {
+				fmt.Fprintf(&sb, `<p>Non scannés, à ajouter aux cibles s'ils sont dans le périmètre : <code>%s</code></p>`, esc(strings.Join(todo, " ")))
+			}
 		}
 		if len(e.Netblocks) > 0 {
 			sb.WriteString(`<p>Blocs d'IP enregistrés au nom de l'organisation (RDAP) : <b>non scannés</b>, à ajouter au périmètre si le client confirme qu'ils sont à lui.</p>`)

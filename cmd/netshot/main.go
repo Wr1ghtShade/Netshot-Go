@@ -77,7 +77,8 @@ func main() {
 	noPivot := fs.Bool("no-pivot", false, "do not read the certificate names of the targets nor search crt.sh and RDAP for the organisation")
 	udpFlag := fs.Bool("udp", false, "probe DNS, NTP, SNMP (v3 discovery), IKE, OpenVPN and SSDP over UDP on every target IP (active)")
 	noIPv6 := fs.Bool("no-ipv6-parity", false, "do not compare the scanned ports of the dual-stack names on IPv4 and IPv6")
-	noCloudTargets := fs.Bool("no-cloud-targets", false, "keep the cloud footprint but do not add the domains and tenant pages found to the scan")
+	addDiscovered := fs.Bool("add-discovered", false, "add the names found by the cloud footprint and the certificates to the scan (default: listed in the report only, as a discovery is not a scope)")
+	_ = fs.Bool("no-cloud-targets", false, "obsolete: nothing found is added to the scan unless -add-discovered")
 	noReputation := fs.Bool("no-reputation", false, "do not check the reputation of the host names (block lists, URLhaus, Criminal IP); -no-enrich turns it off too")
 	cipIPs := fs.Int("criminalip-ips", defaultCIPIPs, "with the key criminalip: public IPs looked up per scan (free account: 50 per month); 0 = none")
 	cipDomains := fs.Int("criminalip-domains", defaultCIPDomains, "with the key criminalip: registrable domains scanned per scan (free account: 100 per month); 0 = none")
@@ -261,7 +262,7 @@ func main() {
 		Enrich:         !*noEnrich,
 		Reputation:     !*noEnrich && !*noReputation,
 		Cloud:          !*noCloud,
-		CloudTargets:   !*noCloudTargets,
+		CloudTargets:   *addDiscovered,
 		Pivot:          !*noPivot,
 		UDP:            *udpFlag,
 		IPv6Parity:     !*noIPv6,

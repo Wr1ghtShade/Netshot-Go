@@ -66,13 +66,14 @@ type CloudIP struct {
 }
 
 type CloudReport struct {
-	Domains  []string       `json:"domains"`
-	Tenants  []CloudTenant  `json:"tenants,omitempty"`
-	Services []CloudService `json:"services,omitempty"`
-	IPs      []CloudIP      `json:"ips,omitempty"`
-	Added    []string       `json:"added,omitempty"`       // hosts added to the scan ("host" or "host (443)")
-	Own      []string       `json:"org_domains,omitempty"` // registrable domains of the organisation (scanned + tenant)
-	Errors   []string       `json:"errors,omitempty"`
+	Domains    []string       `json:"domains"`
+	Tenants    []CloudTenant  `json:"tenants,omitempty"`
+	Services   []CloudService `json:"services,omitempty"`
+	IPs        []CloudIP      `json:"ips,omitempty"`
+	Added      []string       `json:"added,omitempty"`       // hosts added to the scan ("host" or "host (443)")
+	Candidates []string       `json:"candidates,omitempty"`  // hosts found but not scanned (-add-discovered off)
+	Own        []string       `json:"org_domains,omitempty"` // registrable domains of the organisation (scanned + tenant)
+	Errors     []string       `json:"errors,omitempty"`
 }
 
 // --- Signatures --------------------------------------------------------------------------------
@@ -858,9 +859,6 @@ func discoverCloud(ctx context.Context, hosts []string, logf func(string, ...any
 			addWeb(t.Name + "-my.sharepoint.com")
 		}
 	}
-	if len(rep.Added) > 0 {
-		logf("[cloud] %d cible(s) ajoutée(s) au scan : %s", len(rep.Added), strings.Join(rep.Added, ", "))
-	}
 	for d := range own {
 		rep.Own = append(rep.Own, d)
 	}
@@ -980,7 +978,7 @@ func finishCloud(ctx context.Context, rep *CloudReport, results []Result, exps [
 // --- Output -----------------------------------------------------------------------------------
 
 func (rep *CloudReport) empty() bool {
-	return rep == nil || len(rep.Tenants)+len(rep.Services)+len(rep.IPs)+len(rep.Added) == 0
+	return rep == nil || len(rep.Tenants)+len(rep.Services)+len(rep.IPs)+len(rep.Added)+len(rep.Candidates) == 0
 }
 
 func cloudSection(rep *CloudReport) string {
@@ -1013,6 +1011,10 @@ func cloudSection(rep *CloudReport) string {
 	}
 	if len(rep.Added) > 0 {
 		fmt.Fprintf(&sb, `<p>Ajouté(s) au scan : %s</p>`, e(strings.Join(rep.Added, ", ")))
+	}
+	if len(rep.Candidates) > 0 {
+		fmt.Fprintf(&sb, `<p><b>Découvert(s), non scanné(s)</b> (à ajouter aux cibles s'ils sont dans le périmètre, ou relancer avec « Ajouter les découvertes au scan ») : <code>%s</code></p>`,
+			e(strings.Join(rep.Candidates, " ")))
 	}
 	if len(rep.Services) > 0 {
 		sb.WriteString(`<table><tr><th>Catégorie</th><th>Service</th><th>Nom</th><th>Indice</th><th>Valeur</th></tr>`)
@@ -1055,6 +1057,9 @@ func cloudRows(rep *CloudReport) [][]string {
 	}
 	for _, a := range rep.Added {
 		rows = append(rows, []string{"ajout", a, "", "", "", "ajouté au scan"})
+	}
+	for _, a := range rep.Candidates {
+		rows = append(rows, []string{"découverte", a, "", "", "", "non scanné : à ajouter aux cibles s'il est dans le périmètre"})
 	}
 	return rows
 }

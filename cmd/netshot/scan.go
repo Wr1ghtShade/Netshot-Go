@@ -48,7 +48,7 @@ type Options struct {
 	Pivot          bool         // certificate names, crt.sh by organisation, RDAP netblocks (discover.go)
 	UDP            bool         // -udp: DNS, NTP, SNMP, IKE, OpenVPN, SSDP probes
 	IPv6Parity     bool         // scanned ports of the dual-stack names on IPv4 and IPv6
-	CloudTargets   bool         // add the domains and tenant pages found to the scan
+	CloudTargets   bool         // -add-discovered: add the names found (cloud, certificates) to the scan
 	CIP            CIPLimits    // Criminal IP lookups per scan (with the key "criminalip")
 	Proxy          *Proxy       // pages, favicons, folders and files go through it
 	Exclusions     *Exclusions  // out-of-scope targets, never scanned
@@ -412,8 +412,12 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 				}
 				hosts = append(hosts, h)
 			}
+			if len(cloud.Added) > 0 {
+				logf("[cloud] %d cible(s) ajoutée(s) au scan : %s", len(cloud.Added), strings.Join(cloud.Added, ", "))
+			}
 		} else {
-			cloud.Added = nil
+			// default: a discovery is not a scope; listed in the report, never scanned
+			cloud.Candidates, cloud.Added = cloud.Added, nil
 		}
 	}
 	ext := &Extra{}
@@ -449,11 +453,22 @@ func Run(ctx context.Context, hosts []string, opt Options, cb Callbacks) ([]Resu
 			hosts = append(hosts, added...)
 		} else {
 			for i := range ext.CertNames {
-				ext.CertNames[i].Added = false
+				ext.CertNames[i].Candidate, ext.CertNames[i].Added = ext.CertNames[i].Added, false
 			}
-			for i := range ext.OrgDomains {
-				ext.OrgDomains[i].Added = false
+		}
+	}
+	if !opt.CloudTargets {
+		n := len(ext.OrgDomains)
+		if cloud != nil {
+			n += len(cloud.Candidates)
+		}
+		for _, p := range ext.CertNames {
+			if p.Candidate {
+				n++
 			}
+		}
+		if n > 0 {
+			logf("[découverte] %d cible(s) découverte(s), non scannées (hors périmètre tant que non confirmées) : voir le rapport. Option « Ajouter les découvertes au scan » / -add-discovered pour les scanner.", n)
 		}
 	}
 	var extra []string

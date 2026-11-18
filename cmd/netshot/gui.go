@@ -60,6 +60,7 @@ type startRequest struct {
 	Pivot          *bool    `json:"pivot"` // nil = on
 	UDP            bool     `json:"udp"`
 	Stealth        bool     `json:"stealth"`
+	AddDiscovered  bool     `json:"add_discovered"`
 	StealthDelay   string   `json:"stealth_delay"`
 	IPv6Parity     *bool    `json:"ipv6_parity"` // nil = on
 	TLS            bool     `json:"tls"`
@@ -460,7 +461,7 @@ func (s *guiServer) prepare(req startRequest) ([]string, Options, string, error)
 		Enrich:         req.Enrich,
 		Reputation:     req.Reputation,
 		Cloud:          req.Cloud == nil || *req.Cloud,
-		CloudTargets:   true,
+		CloudTargets:   req.AddDiscovered,
 		Pivot:          req.Pivot == nil || *req.Pivot,
 		UDP:            req.UDP,
 		Stealth:        req.Stealth,
