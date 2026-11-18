@@ -38,6 +38,7 @@ netshot-go/
 │   ├── discover.go           certificats, crt.sh par organisation, blocs RDAP, UDP, IPv6, GitHub
 │   ├── risks.go              synthèse « Top risques » du rapport
 │   ├── stealth.go            mode furtif
+│   ├── defectdojo.go         export DefectDojo (Generic Findings Import)
 │   ├── settings.go           réglages de l'interface (thème) dans settings.json
 │   ├── window_*.go           ouverture maximisée de la fenêtre (Windows)
 │   ├── wordlist.go, subdomains.txt   dictionnaire de la force brute DNS
@@ -418,6 +419,27 @@ possible.
 
 Le journal annonce la durée estimée des seuls tests de ports (au-delà de 2 h, l'interface demande
 confirmation). Exemple : 1 hôte x 5 ports ≈ 30 s ; un /24 x 5 ports ≈ 2 h 20 min.
+
+### 🐞 Export DefectDojo
+
+Chaque scan écrit `defectdojo.json` au format **Generic Findings Import** de DefectDojo :
+
+| Finding | Gravité |
+|---|---|
+| chaque CVE par IP (Shodan InternetDB) et par technologie détectée (NVD) | Critical si CISA KEV ou CVSS ≥ 9, High si CVSS ≥ 7 ou EPSS ≥ 50 %, Medium sinon (ou sans score, version à confirmer), Low si CVSS < 4 |
+| chaque constat du « Top risques » (fichiers sensibles, secrets, interfaces d'administration, TLS, prise de contrôle de sous-domaine, réputation, UDP, IPv6, code public…) | celle du rapport |
+| les fichiers exposés de gravité moyenne ou info | celle du rapport |
+
+Chaque finding a un `unique_id_from_tool` stable d'un scan à l'autre (identique en Go et en
+Python) : une réimportation ferme ce qui a été corrigé et garde l'historique du reste. Les
+endpoints (URL, nom, IP) sont renseignés.
+
+**Import dans l'interface** : Engagement > Import Scan Results > type « Generic Findings Import »
+> `defectdojo.json`. **Par l'API** (premier import, puis réimport dans le même test) :
+
+```
+curl -X POST "$DD/api/v2/import-scan/" -H "Authorization: Token $TOKEN" -F scan_type="Generic Findings Import" -F engagement=12 -F file=@defectdojo.json && curl -X POST "$DD/api/v2/reimport-scan/" -H "Authorization: Token $TOKEN" -F scan_type="Generic Findings Import" -F test=34 -F file=@defectdojo.json
+```
 
 ### 🎯 Top risques
 

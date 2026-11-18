@@ -680,6 +680,9 @@ feed:
 		}
 	}
 	runExtraChecks(ctx, opt, hosts, ownDomains, results, exposures, cloud, ext, logf)
+	if err := writeDefectDojo(opt.Output, buildDefectDojo(results, exposures, tlsResults, inv, takeovers, reps, cloud, ext, time.Now())); err != nil {
+		logf("[defectdojo] %v", err)
+	}
 	if err := writeReports(results, exposures, tlsResults, opt.Output, inv, groups, takeovers, reps, cloud, ext); err != nil {
 		return results, err
 	}
