@@ -54,3 +54,15 @@ func TestDNSServerValue(t *testing.T) {
 		}
 	}
 }
+
+func TestBannerSMTPNotFTP(t *testing.T) {
+	for banner, want := range map[string]string{
+		"220-garfish.o2switch.net ESMTP Exim 4.100.1 #2": "Exim",
+		"220 mail.exemple.fr ESMTP ready":                "SMTP",
+		"220 This is mooftpserv v1.0. Good day":          "FTP",
+	} {
+		if name, _, _ := parseBanner(banner); name != want {
+			t.Errorf("%q -> %q, want %q", banner, name, want)
+		}
+	}
+}

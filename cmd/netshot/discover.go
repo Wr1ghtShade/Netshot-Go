@@ -2,8 +2,8 @@ package main
 
 // Wider discovery around the scanned organisation (1.2.10):
 //   - certificate pivot: names of the certificates served on 443 by the targets (SAN); those of the
-//     organisation's domains are added to the scan. The organisation names (O=) of these certificates
-//     are searched in crt.sh: the domains certified under the same name are added too.
+//     scanned domains are added to the scan. The organisation names (O=) of these certificates are
+//     searched in crt.sh: the domains certified under the same name are listed, never added.
 //   - IP blocks registered to the organisation (RDAP of the public IPs found): listed, never added.
 //   - UDP (-udp, active): DNS (open resolver), NTP, SNMP (v3 discovery, no community tried), IKE,
 //     OpenVPN, SSDP on each target IP.
@@ -226,10 +226,11 @@ func crtshOrg(ctx context.Context, org string) ([]string, error) {
 	return out, nil
 }
 
-// orgPivot searches crt.sh for the organisation names of the certificates (3 at most) and returns the
-// new domains to add (25 at most, only those that resolve).
+// orgPivot searches crt.sh for the organisation names of the certificates (3 at most) and LISTS the
+// domains certified under the same name (100 at most): it never adds them to the scan. The same
+// organisation name can cover a public website hosted by a third party (shared hosting, agency)
+// while the audit covers an internal network: the auditor decides what is in scope.
 func orgPivot(ctx context.Context, own map[string]bool, known map[string]bool, ext *Extra, logf func(string, ...any)) []string {
-	var add []string
 	orgs := ext.CertOrgs
 	if len(orgs) > 3 {
 		orgs = orgs[:3]
@@ -243,46 +244,17 @@ func orgPivot(ctx context.Context, own map[string]bool, known map[string]bool, e
 			logf("[pivot] crt.sh O=%s : %v", o, err)
 			continue
 		}
-		// a large organisation can have thousands of certified domains: 100 examined at most,
-		// resolved in parallel, and only those 100 listed in the report
-		var fresh []string
-		for _, d := range domains {
-			if !own[d] && !known[d] && len(fresh) < 100 {
-				fresh = append(fresh, d)
-			}
-		}
-		alive := make([]bool, len(fresh))
-		var wg sync.WaitGroup
-		sem := make(chan struct{}, 16)
-		for i, d := range fresh {
-			wg.Add(1)
-			go func(i int, d string) {
-				defer wg.Done()
-				sem <- struct{}{}
-				defer func() { <-sem }()
-				alive[i] = ctx.Err() == nil && resolves(ctx, d)
-			}(i, d)
-		}
-		wg.Wait()
 		n := 0
-		for i, d := range fresh {
-			pn := PivotName{Name: d, Via: "crt.sh O=" + o}
-			if alive[i] && n < 25 {
-				pn.Added = true
-				add = append(add, d)
-				known[d] = true
-				own[d] = true
-				n++
+		for _, d := range domains {
+			if own[d] || known[d] || n >= 100 {
+				continue
 			}
-			ext.OrgDomains = append(ext.OrgDomains, pn)
+			n++
+			ext.OrgDomains = append(ext.OrgDomains, PivotName{Name: d, Via: "crt.sh O=" + o})
 		}
-		more := ""
-		if len(domains) > len(fresh) {
-			more = fmt.Sprintf(" (%d déjà connus ou au-delà des 100 examinés)", len(domains)-len(fresh))
-		}
-		logf("[pivot] crt.sh O=%s : %d domaine(s)%s, %d ajouté(s) au scan", o, len(domains), more, n)
+		logf("[pivot] crt.sh O=%s : %d autre(s) domaine(s) au même nom, listés dans le rapport (non scannés : à ajouter aux cibles s'ils sont dans le périmètre)", o, n)
 	}
-	return add
+	return nil
 }
 
 // --- RDAP netblocks ------------------------------------------------------------------------------
@@ -777,11 +749,14 @@ func (e *Extra) empty() bool {
 		e.IPv6Note == "" && e.GitHubNote == "" && e.UDPNote == ""
 }
 
-func addedMark(b bool) string {
-	if b {
+func addedMark(p PivotName) string {
+	switch {
+	case p.Added:
 		return "ajouté au scan"
+	case strings.HasPrefix(p.Via, "crt.sh"):
+		return "non scanné : à ajouter aux cibles s'il est dans le périmètre"
 	}
-	return "hors organisation ou ne résout pas"
+	return "hors des domaines scannés ou ne résout pas"
 }
 
 func extraSections(e *Extra) string {
@@ -805,7 +780,7 @@ func extraSections(e *Extra) string {
 		if list := append(append([]PivotName{}, e.CertNames...), e.OrgDomains...); len(list) > 0 {
 			sb.WriteString(`<table><tr><th>Nom</th><th>Trouvé par</th><th>Suite</th></tr>`)
 			for _, p := range list {
-				fmt.Fprintf(&sb, `<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, esc(p.Name), esc(p.Via), addedMark(p.Added))
+				fmt.Fprintf(&sb, `<tr><td>%s</td><td>%s</td><td>%s</td></tr>`, esc(p.Name), esc(p.Via), addedMark(p))
 			}
 			sb.WriteString(`</table>`)
 		}
@@ -891,7 +866,7 @@ func extraRows(e *Extra) [][]string {
 	}
 	var rows [][]string
 	for _, p := range append(append([]PivotName{}, e.CertNames...), e.OrgDomains...) {
-		rows = append(rows, []string{"nom", p.Name, p.Via, addedMark(p.Added), ""})
+		rows = append(rows, []string{"nom", p.Name, p.Via, addedMark(p), ""})
 	}
 	for _, b := range e.Netblocks {
 		rows = append(rows, []string{"bloc IP", b.CIDR, b.Name + " / " + b.Org, "indice " + b.Match + ", vu depuis " + b.FromIP,
